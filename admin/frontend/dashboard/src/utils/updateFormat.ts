@@ -24,7 +24,7 @@ export type OperationSite = Partial<Omit<MigrationSite, 'backup_status'>> & {
   backup_status?: MigrationSite['backup_status'] | 'unsupported'
 }
 
-export type StateTone = 'green' | 'blue' | 'red' | 'orange' | 'gray'
+export type StateTone = 'green' | 'blue' | 'red' | 'amber' | 'gray'
 
 export type SiteStatus = {
   label: string
@@ -125,14 +125,14 @@ const STATE_TONE: Record<string, StateTone> = {
   reverted: 'blue',
   needs_attention: 'red',
   revert_failed: 'red',
-  preparing: 'orange',
-  backing_up: 'orange',
-  updating: 'orange',
-  migrating: 'orange',
-  retrying: 'orange',
-  reverting_apps: 'orange',
-  reverting_sites: 'orange',
-  restarting: 'orange',
+  preparing: 'amber',
+  backing_up: 'amber',
+  updating: 'amber',
+  migrating: 'amber',
+  retrying: 'amber',
+  reverting_apps: 'amber',
+  reverting_sites: 'amber',
+  restarting: 'amber',
 }
 
 const STATE_LABEL: Record<string, string> = {
@@ -161,16 +161,16 @@ export const stateLabel = (state: string) => {
 // Per-site lifecycle: pending -> backing up -> running -> success / failed / recovered
 export const siteStatus = (site: OperationSite): SiteStatus => {
   if (site.migration_status === 'recovering')
-    return { label: 'Recovering', tone: 'orange', busy: true, value: 'recovering' }
+    return { label: 'Recovering', tone: 'amber', busy: true, value: 'recovering' }
   if (site.migration_status === 'recovered')
     return { label: 'Recovered', tone: 'green', value: 'recovered' }
   if (site.migration_status === 'success')
     return { label: 'Success', tone: 'green', value: 'success' }
   if (site.migration_status === 'running')
-    return { label: 'Migrating', tone: 'orange', busy: true, value: 'running' }
+    return { label: 'Migrating', tone: 'amber', busy: true, value: 'running' }
   if (site.migration_status === 'failed') return { label: 'Failed', tone: 'red', value: 'failed' }
   if (site.backup_status === 'backing_up')
-    return { label: 'Backing up', tone: 'orange', busy: true, value: 'backing_up' }
+    return { label: 'Backing up', tone: 'amber', busy: true, value: 'backing_up' }
   if (site.backup_status === 'failed') return { label: 'Failed', tone: 'red', value: 'failed' }
   if (site.backup_status === 'backed_up')
     return { label: 'Backed up', tone: 'blue', value: 'backed_up' }

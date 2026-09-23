@@ -31,7 +31,7 @@ const storageUsed = computed(() => storageLabel(siteName))
 
 setBreadcrumbs([{ label: 'Sites', route: { name: 'Sites' } }, { label: siteName }])
 
-const STATUS_THEMES = { online: 'gray', broken: 'red', offline: 'orange', provisioning: 'blue' }
+const STATUS_THEMES = { online: 'gray', broken: 'red', offline: 'amber', provisioning: 'blue' }
 const STATUS_LABELS = {
   online: 'Active',
   broken: 'Broken',
