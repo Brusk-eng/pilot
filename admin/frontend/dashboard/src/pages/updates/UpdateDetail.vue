@@ -1,25 +1,16 @@
 <script setup lang="ts">
+import { Badge, Button, Dialog, ErrorMessage, Skeleton, Spinner, Tooltip } from 'frappe-ui'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-
-import {
-  Badge,
-  Button,
-  Dialog,
-  ErrorMessage,
-  Skeleton,
-  Spinner,
-  Tooltip,
-} from 'frappe-ui'
+import { isActive, isResolved, needsAttention, updatesApi } from '@/api/updates'
 import AppIcon from '@/components/apps/AppIcon.vue'
-import JobRow from '@/components/updates/JobRow.vue'
 import LogView from '@/components/logs/LogView.vue'
+import JobRow from '@/components/updates/JobRow.vue'
 import UpdateSection from '@/components/updates/UpdateSection.vue'
 import UpdateStateBadge from '@/components/updates/UpdateStateBadge.vue'
 import { useAppRegistry } from '@/composables/apps/useAppRegistry'
-import { processLine } from '@/utils/ansi'
-import { updatesApi, isActive, isResolved, needsAttention } from '@/api/updates'
 import { useBreadcrumbs } from '@/composables/common/useBreadcrumbs'
+import { processLine } from '@/utils/ansi'
 import { fmtDateTime, fmtDuration } from '@/utils/taskFormat'
 import { opTitle, patchSkipped, pendingActionLabel, siteStatus } from '@/utils/updateFormat'
 
@@ -77,9 +68,7 @@ const sitesCount = computed(() => {
   return `${sites.length}`
 })
 
-const startedAt = computed(() =>
-  op.value.started_at ? fmtDateTime(op.value.started_at) : '',
-)
+const startedAt = computed(() => (op.value.started_at ? fmtDateTime(op.value.started_at) : ''))
 
 const duration = computed(() => fmtDuration(durationSeconds.value))
 
@@ -255,7 +244,10 @@ onUnmounted(() => clearTimeout(timer))
       <ErrorMessage v-if="error" class="mt-4" :message="error" />
 
       <!-- Unresolved failure -->
-      <section v-if="isAttention" class="mt-4 overflow-hidden rounded-6 border border-outline-gray-2">
+      <section
+        v-if="isAttention"
+        class="mt-4 overflow-hidden rounded-6 border border-outline-gray-2"
+      >
         <div class="p-4">
           <div class="flex items-center gap-2">
             <span class="lucide-alert-triangle size-4 shrink-0 text-ink-red-5" />
@@ -267,7 +259,7 @@ onUnmounted(() => clearTimeout(timer))
           <pre
             v-if="op.diagnosis?.message"
             class="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-5 text-ink-gray-8"
-            >{{ op.diagnosis.message }}</pre>
+          >{{ op.diagnosis.message }}</pre>
           <p v-if="op.diagnosis?.patch" class="mt-2 text-p-sm text-ink-gray-7">
             Failing patch
             <code
@@ -318,19 +310,11 @@ onUnmounted(() => clearTimeout(timer))
               Skip patch
             </Button>
 
-            <Button
-              v-if="op.state === 'needs_attention'"
-              :loading="acting"
-              @click="doRetry"
-            >
+            <Button v-if="op.state === 'needs_attention'" :loading="acting" @click="doRetry">
               Retry update
             </Button>
 
-            <Button
-              v-if="op.can_restore"
-              :loading="acting"
-              @click="confirmRestore = true"
-            >
+            <Button v-if="op.can_restore" :loading="acting" @click="confirmRestore = true">
               Restore backup
             </Button>
           </div>
@@ -355,10 +339,7 @@ onUnmounted(() => clearTimeout(timer))
       </section>
 
       <!-- Run order: apps update first, then sites migrate. -->
-      <div
-        v-if="op.sites?.length || op.apps?.length || serverJobs.length"
-        class="mt-3 space-y-2"
-      >
+      <div v-if="op.sites?.length || op.apps?.length || serverJobs.length" class="mt-3 space-y-2">
         <UpdateSection
           v-if="op.apps?.length"
           v-model:open="appsOpen"
@@ -411,12 +392,7 @@ onUnmounted(() => clearTimeout(timer))
           title="Server"
           :count="serverJobs.length"
         >
-          <JobRow
-            v-for="job in serverJobs"
-            :key="job.id"
-            :job="job"
-            @click="openTaskLog(job)"
-          />
+          <JobRow v-for="job in serverJobs" :key="job.id" :job="job" @click="openTaskLog(job)" />
         </UpdateSection>
 
         <UpdateSection
@@ -480,7 +456,9 @@ onUnmounted(() => clearTimeout(timer))
           :key="index"
           class="px-2.5 py-2 text-sm text-ink-gray-7"
         >
-          <code class="rounded-4 bg-surface-gray-2 px-1 font-mono text-xs">{{ decision.patch }}</code>
+          <code class="rounded-4 bg-surface-gray-2 px-1 font-mono text-xs"
+            >{{ decision.patch }}</code
+          >
           on
           <span class="font-medium text-ink-gray-8">{{ decision.site }}</span>
         </div>
@@ -491,21 +469,20 @@ onUnmounted(() => clearTimeout(timer))
           Skipping marks
           <code class="rounded-4 bg-surface-gray-2 px-1 font-mono">{{ op.diagnosis?.patch }}</code>
           as completed for
-          <b class="text-ink-gray-9">{{ op.failed_site }}</b> without running it. This cannot be
-          undone, and the migration carries on from where it stopped.
+          <b class="text-ink-gray-9">{{ op.failed_site }}</b>
+          without running it. This cannot be undone, and the migration carries on from where it
+          stopped.
         </p>
 
         <template #actions>
-          <Button variant="solid" theme="red" :loading="acting" @click="doSkip"
-            >Skip patch</Button
-          >
+          <Button variant="solid" theme="red" :loading="acting" @click="doSkip">Skip patch</Button>
         </template>
       </Dialog>
 
       <Dialog v-model="confirmRestore" title="Restore this update?">
         <p class="text-p-sm text-ink-gray-6">
-          Apps return to their previous revisions, and migrated sites get their pre-update data
-          back from the recovery backup. Sites that were not migrated yet are left untouched.
+          Apps return to their previous revisions, and migrated sites get their pre-update data back
+          from the recovery backup. Sites that were not migrated yet are left untouched.
         </p>
 
         <template #actions>

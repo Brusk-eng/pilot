@@ -1,8 +1,9 @@
-import { ref, computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import { sitesApi } from '@/api/sites'
+import type { SiteResource } from '@/types/sites'
 
-const sites = ref([])
+const sites = ref<SiteResource[]>([])
 const loading = ref(false)
 const error = ref('')
 
@@ -12,7 +13,7 @@ export const useSites = () => {
     error.value = ''
     try {
       sites.value = await sitesApi.list()
-    } catch (caught) {
+    } catch (caught: any) {
       error.value = caught.message || 'Failed to load sites'
       sites.value = []
     } finally {

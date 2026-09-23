@@ -2,16 +2,12 @@ import { ref } from 'vue'
 
 import { auditApi } from '@/api/audit'
 import type { AuditEntry } from '@/types/audit'
+import type { AuditPage } from '@/types/settings'
 
 interface ActivityFilters {
   type?: string
   site?: string
   status?: string
-}
-
-interface AuditPage {
-  data: AuditEntry[]
-  meta: { limit: number; next_cursor: string | null }
 }
 
 const auditParams = (filters: ActivityFilters, forCursor?: string | null) => {

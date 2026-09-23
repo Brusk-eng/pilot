@@ -1,16 +1,11 @@
 import { ref } from 'vue'
 
 import { notificationsApi } from '@/api/notifications'
-import type { Notification } from '@/types/notification'
+import type { Notification, NotificationPage } from '@/types/notification'
 
 interface NotificationFilters {
   category?: string
   unreadOnly?: boolean
-}
-
-interface NotificationPage {
-  data: Notification[]
-  meta: { limit: number; next_cursor: string | null; unread: number }
 }
 
 const pageSize = 20
@@ -91,7 +86,9 @@ export const useNotifications = () => {
   const refreshBadge = async () => {
     const request = newestRequest
     const localChange = newestLocalChange
-    const page: NotificationPage | null = await notificationsApi.list({ limit: 1 }).catch(() => null)
+    const page: NotificationPage | null = await notificationsApi
+      .list({ limit: 1 })
+      .catch(() => null)
 
     if (!page || request !== newestRequest || localChange !== newestLocalChange) return
 

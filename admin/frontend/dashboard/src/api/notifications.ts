@@ -6,7 +6,7 @@ const mutate = async (pending: Promise<Response>) => {
 
   if (response.ok) return
 
-  const payload = await response.json<void>().catch(() => null)
+  const payload = await response.json().catch(() => null)
   throw new Error(apiErrorMessage(payload, 'Could not update the notification.'))
 }
 

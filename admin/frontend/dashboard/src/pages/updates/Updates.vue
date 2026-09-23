@@ -1,16 +1,15 @@
 <script setup lang="ts">
+import { Badge, Button, ErrorMessage, TabButtons, Tooltip } from 'frappe-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Badge, Button, ErrorMessage, TabButtons, Tooltip } from 'frappe-ui'
-
+import { updatesApi } from '@/api/updates'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ListSkeleton from '@/components/common/ListSkeleton.vue'
-import Table from '@/components/common/Table.vue'
 import StickyToolbar from '@/components/common/StickyToolbar.vue'
-
+import Table from '@/components/common/Table.vue'
 import { useIsMobile } from '@/composables/common/useIsMobile'
-import { updatesApi } from '@/api/updates'
-
+import { fmtDateTime, fmtDuration } from '@/utils/taskFormat'
+import { relativeTime } from '@/utils/time'
 import {
   matchesUpdateFilter,
   opTitle,
@@ -21,8 +20,6 @@ import {
   stateTone,
   UPDATE_FILTERS,
 } from '@/utils/updateFormat'
-import { relativeTime } from '@/utils/time'
-import { fmtDateTime, fmtDuration } from '@/utils/taskFormat'
 
 const route = useRoute()
 const router = useRouter()

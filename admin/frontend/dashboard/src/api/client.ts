@@ -1,9 +1,7 @@
 import ky from 'ky'
 
-import { isSignedOut, reportSignedOut } from '@/composables/auth/useSignedOut'
+import { isSignedOut, reportSignedOut } from '../composables/auth/useSignedOut.ts'
 import type { ErrorResponse } from '@/types/common'
-
-export type ApiErrorPayload = Partial<ErrorResponse> | { error?: string } | null | undefined
 
 export const API_V1_PREFIX = '/api/v1'
 
@@ -12,23 +10,31 @@ export const apiUrl = (path = '', origin = ''): string => {
   return `${origin}${API_V1_PREFIX}${suffix}`
 }
 
+const errorOf = (payload: unknown): unknown => {
+  if (typeof payload !== 'object' || payload === null || !('error' in payload)) return undefined
+  return payload.error
+}
+
+export const hasApiError = (payload: unknown): boolean => Boolean(errorOf(payload))
+
 export const apiErrorMessage = (payload: unknown, fallback = 'Request failed.'): string => {
-  const error = (payload as ApiErrorPayload)?.error
-  if (typeof error === 'object' && typeof error?.message === 'string' && error.message) {
-    return error.message
-  }
+  const error = errorOf(payload)
   if (typeof error === 'string' && error) return error
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = error.message
+    if (typeof message === 'string' && message) return message
+  }
   return fallback
 }
 
 export const unwrap = async <T>(parsed: Promise<T>): Promise<T> => {
   const data = await parsed
-  if ((data as { error?: unknown })?.error) {
+  if (hasApiError(data)) {
     // Once the signed-out modal owns the screen, every in-flight call fails for the same
     // reason. Never settling leaves callers in their loading state rather than painting
     // error text behind the modal; the page is about to be replaced by a fresh sign-in.
     if (isSignedOut()) return new Promise<T>(() => {})
-    throw new Error(apiErrorMessage(data as ApiErrorPayload))
+    throw new Error(apiErrorMessage(data))
   }
   return data
 }
@@ -39,7 +45,7 @@ export const isSessionExpired = async (response: Response) => {
   // not a session that stopped working underneath the user.
   if (response?.status !== 401) return false
   try {
-    const body = (await response.clone().json<boolean>()) as Partial<ErrorResponse>
+    const body: Partial<ErrorResponse> = await response.clone().json()
     return body?.error?.code === 'authentication_required'
   } catch {
     return false

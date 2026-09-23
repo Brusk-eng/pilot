@@ -1,22 +1,28 @@
 <script setup lang="ts">
-import { useRoute, useRouter } from 'vue-router'
+import {
+  Badge,
+  Button,
+  Dropdown,
+  ErrorMessage,
+  Select,
+  TabButtons,
+  TextInput,
+  toast,
+} from 'frappe-ui'
 import { computed, onMounted, ref, watch } from 'vue'
-
-import { Badge, Button, Dropdown, ErrorMessage, Select, TabButtons, TextInput, toast } from 'frappe-ui'
-
-import EmptyState from '@/components/common/EmptyState.vue'
-import Table from '@/components/common/Table.vue'
-import SiteSkeleton from '@/components/sites/SiteSkeleton.vue'
-import NewSiteDialog from '@/components/sites/NewSiteDialog.vue'
-import StickyToolbar from '@/components/common/StickyToolbar.vue'
-
-import { sitesApi } from '@/api/sites'
+import { useRoute, useRouter } from 'vue-router'
 import { apiErrorMessage } from '@/api/client'
-import { openSiteLogin } from '@/utils/siteLogin'
-import { openTaskDetailPage } from '@/utils/taskRoute'
-import { useSites } from '@/composables/sites/useSites'
+import { sitesApi } from '@/api/sites'
+import EmptyState from '@/components/common/EmptyState.vue'
+import StickyToolbar from '@/components/common/StickyToolbar.vue'
+import Table from '@/components/common/Table.vue'
+import NewSiteDialog from '@/components/sites/NewSiteDialog.vue'
+import SiteSkeleton from '@/components/sites/SiteSkeleton.vue'
 import { useIsMobile } from '@/composables/common/useIsMobile'
 import { useSiteStorage } from '@/composables/sites/useSiteStorage'
+import { useSites } from '@/composables/sites/useSites'
+import { openSiteLogin } from '@/utils/siteLogin'
+import { openTaskDetailPage } from '@/utils/taskRoute'
 
 const route = useRoute()
 const router = useRouter()

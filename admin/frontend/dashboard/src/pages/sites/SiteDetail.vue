@@ -1,24 +1,22 @@
 <script setup lang="ts">
+import { Badge, Button, Dropdown, ErrorMessage, Skeleton, TabButtons, toast } from 'frappe-ui'
 import { computed, onMounted, onUnmounted, ref, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Badge, Button, Dropdown, ErrorMessage, Skeleton, TabButtons, toast } from 'frappe-ui'
-
+import { apiErrorMessage } from '@/api/client'
+import PageHero from '@/components/common/PageHero.vue'
+import StickyToolbar from '@/components/common/StickyToolbar.vue'
 import SiteApps from '@/components/sites/Apps.vue'
 import SiteBackups from '@/components/sites/Backups.vue'
 import SiteConfig from '@/components/sites/Config.vue'
 import SiteSettings from '@/components/sites/Settings.vue'
-import PageHero from '@/components/common/PageHero.vue'
-import Activities from '@/pages/Activities.vue'
-import StickyToolbar from '@/components/common/StickyToolbar.vue'
-
-import { apiErrorMessage } from '@/api/client'
+import { useAppRegistry } from '@/composables/apps/useAppRegistry'
 import { useBreadcrumbs } from '@/composables/common/useBreadcrumbs'
+import { useIsMobile } from '@/composables/common/useIsMobile'
 import { useSite } from '@/composables/sites/useSite'
 import { useSiteStorage } from '@/composables/sites/useSiteStorage'
-import { useAppRegistry } from '@/composables/apps/useAppRegistry'
-import { useIsMobile } from '@/composables/common/useIsMobile'
-import { openTaskDetailPage } from '@/utils/taskRoute'
+import Activities from '@/pages/Activities.vue'
 import { toSentenceCase } from '@/utils/format'
+import { openTaskDetailPage } from '@/utils/taskRoute'
 
 const route = useRoute()
 const router = useRouter()
@@ -157,7 +155,8 @@ const menuOptions = computed(() => [
 // until they do, so the badge and the header button settle on their own.
 const POLL_INTERVAL_MS = 5000
 const isSettling = computed(
-  () => status.value === 'provisioning' || (status.value === 'online' && !site.value.setup_complete),
+  () =>
+    status.value === 'provisioning' || (status.value === 'online' && !site.value.setup_complete),
 )
 
 let poll = null
@@ -223,11 +222,7 @@ onMounted(() => {
           {{ site.name }}
         </h1>
 
-        <Badge
-          :label="statusLabel"
-          :theme="statusBadgeTheme"
-          class="shrink-0"
-        />
+        <Badge :label="statusLabel" :theme="statusBadgeTheme" class="shrink-0" />
       </template>
 
       <template v-if="storageUsed" #subtitle>{{ storageUsed }} used</template>

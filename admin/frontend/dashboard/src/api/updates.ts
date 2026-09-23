@@ -29,14 +29,14 @@ export const isResolved = (operation: Operation) => {
   return !operation || operation.state === 'completed' || operation.state === 'reverted'
 }
 
-export const needsAttention = (operation: Operation) => {
+export const needsAttention = (operation: Operation): boolean => {
   return !!operation && ATTENTION_STATES.includes(operation.state)
 }
 
-export const isActive = (operation: Operation) => {
+export const isActive = (operation: Operation): boolean => {
   return !!operation && ACTIVE_STATES.includes(operation.state)
 }
 
-export const isPending = (operation: Operation) => {
+export const isPending = (operation: Operation): boolean => {
   return !!operation?.pending_action
 }
