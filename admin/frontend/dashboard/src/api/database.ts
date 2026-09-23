@@ -1,91 +1,108 @@
-import { request } from "@/api/client";
+import { request } from '@/api/client'
+import type {
+  ActionStatus,
+  BinlogFile,
+  DatabaseCapabilities,
+  DatabaseConfigurationSnapshot,
+  DatabaseDiagnostics,
+  DatabaseProcess,
+  DatabaseSite,
+  DatabaseSize,
+  ExecutedQuery,
+  LockWaitRow,
+  PerformanceSection,
+  TableSchema,
+  TableSize,
+  UnsupportedDatabaseDiagnostics,
+} from '@/types/database'
 
 export const databaseApi = {
-  sites: () => request.get("database/sites").json(),
+  sites: () => request.get('database/sites').json<DatabaseSite[]>(),
 
-  schema: (site) =>
-    request.get("database/schema", { searchParams: { site } }).json(),
+  schema: (site: string) =>
+    request.get('database/schema', { searchParams: { site } }).json<TableSchema[]>(),
 
-  execute: (site, query, readOnly) =>
+  execute: (site: string, query: string, readOnly: boolean) =>
     request
-      .post("database/queries", { json: { site, query, read_only: readOnly } })
-      .json(),
+      .post('database/queries', { json: { site, query, read_only: readOnly } })
+      .json<ExecutedQuery>(),
 
-  diagnostics: () => request.get("database/diagnostics").json(),
-
-  processList: (site = "") =>
+  diagnostics: () =>
     request
-      .get("database/processlist", { searchParams: site ? { site } : {} })
-      .json(),
+      .get('database/diagnostics')
+      .json<DatabaseDiagnostics | UnsupportedDatabaseDiagnostics>(),
 
-  lockWaitRows: (site = "") =>
+  processList: (site = '') =>
     request
-      .get("database/lockwaits", { searchParams: site ? { site } : {} })
-      .json(),
+      .get('database/processlist', { searchParams: site ? { site } : {} })
+      .json<DatabaseProcess[]>(),
 
-  size: (site = "") =>
-    request.get("database/size", { searchParams: site ? { site } : {} }).json(),
+  lockWaitRows: (site = '') =>
+    request.get('database/lockwaits', { searchParams: site ? { site } : {} }).json<LockWaitRow[]>(),
 
-  tableSizes: (site) =>
-    request.get("database/table-sizes", { searchParams: { site } }).json(),
+  size: (site = '') =>
+    request.get('database/size', { searchParams: site ? { site } : {} }).json<DatabaseSize>(),
 
-  performanceReport: (reportType, site = "", limit = 20, offset = 0) =>
+  tableSizes: (site: string) =>
+    request.get('database/table-sizes', { searchParams: { site } }).json<TableSize[]>(),
+
+  performanceReport: (reportType: string, site = '', limit = 20, offset = 0) =>
     request
-      .get("database/performance-report", {
+      .get('database/performance-report', {
         searchParams: { report_type: reportType, site, limit, offset },
       })
-      .json(),
+      .json<PerformanceSection>(),
 
-  killProcess: (processId) =>
+  killProcess: (processId: number) =>
     request
-      .post("database/processlist/kill", { json: { process_id: processId } })
-      .json(),
+      .post('database/processlist/kill', { json: { process_id: processId } })
+      .json<ActionStatus>(),
 
   binlogs: {
-    list: () => request.get("database/binlogs").json(),
-    purge: (upTo) =>
-      request.post("database/binlogs/purge", { json: { up_to: upTo } }).json(),
+    list: () => request.get('database/binlogs').json<BinlogFile[]>(),
+    purge: (upTo: string) =>
+      request.post('database/binlogs/purge', { json: { up_to: upTo } }).json<ActionStatus>(),
   },
 
   configurations: {
-    list: () => request.get("database/configurations").json(),
-    set: (variable, value, idempotencyKey) =>
+    list: () => request.get('database/configurations').json<DatabaseConfigurationSnapshot>(),
+    set: (variable: string, value: unknown, idempotencyKey: string) =>
       request
         .post(`database/configurations/${encodeURIComponent(variable)}`, {
           json: { value },
-          headers: { "Idempotency-Key": idempotencyKey },
+          headers: { 'Idempotency-Key': idempotencyKey },
         })
-        .json(),
+        .json<DatabaseConfigurationSnapshot>(),
   },
 
   quickActions: {
-    capabilities: () => request.get("database/quick-actions").json(),
-    restart: (idempotencyKey) =>
+    capabilities: () => request.get('database/quick-actions').json<DatabaseCapabilities>(),
+    restart: (idempotencyKey: string) =>
       request
-        .post("database/quick-actions/restart", {
-          headers: { "Idempotency-Key": idempotencyKey },
+        .post('database/quick-actions/restart', {
+          headers: { 'Idempotency-Key': idempotencyKey },
         })
-        .json(),
-    setPerformanceSchema: (enabled, idempotencyKey) =>
+        .json<ActionStatus>(),
+    setPerformanceSchema: (enabled: boolean, idempotencyKey: string) =>
       request
-        .post("database/quick-actions/performance-schema", {
+        .post('database/quick-actions/performance-schema', {
           json: { enabled },
-          headers: { "Idempotency-Key": idempotencyKey },
+          headers: { 'Idempotency-Key': idempotencyKey },
         })
-        .json(),
-    setInnoDBBufferPoolSize: (sizeMb, idempotencyKey) =>
+        .json<ActionStatus>(),
+    setInnoDBBufferPoolSize: (sizeMb: number, idempotencyKey: string) =>
       request
-        .post("database/quick-actions/innodb-buffer-pool-size", {
+        .post('database/quick-actions/innodb-buffer-pool-size', {
           json: { size_mb: sizeMb },
-          headers: { "Idempotency-Key": idempotencyKey },
+          headers: { 'Idempotency-Key': idempotencyKey },
         })
-        .json(),
-    setMaxConnections: (maxConnections, idempotencyKey) =>
+        .json<ActionStatus>(),
+    setMaxConnections: (maxConnections: number, idempotencyKey: string) =>
       request
-        .post("database/quick-actions/max-connections", {
+        .post('database/quick-actions/max-connections', {
           json: { max_connections: maxConnections },
-          headers: { "Idempotency-Key": idempotencyKey },
+          headers: { 'Idempotency-Key': idempotencyKey },
         })
-        .json(),
+        .json<ActionStatus>(),
   },
-};
+}

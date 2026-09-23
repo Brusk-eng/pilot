@@ -1,105 +1,152 @@
 import { apiUrl, request, unwrap } from '@/api/client'
+import type { DisabledApp, EnabledApp, SiteApps } from '@/types/siteApps'
+import type { Backup, BackupSchedule } from '@/types/siteBackups'
+import type { DnsRecords, SiteDomains } from '@/types/siteDomains'
+import type { SiteAnalytics, SiteUptime } from '@/types/siteMonitoring'
+import type { SiteStorageReport } from '@/types/siteStorage'
+import type {
+  MigrationStarted,
+  SiteDetail,
+  SiteLoginLink,
+  SiteResource,
+  WildcardDomains,
+} from '@/types/sites'
+import type { TaskPayload } from '@/types/tasks'
+
+type SiteConfig = Record<string, unknown>
 
 // App install and remove answer inline for a disabled app, so they wait on frappe.
-const INLINE_TIMEOUT = 120_000
+const inlineTimeout = 120_000
 
 export const sitesApi = {
-  list: () => request.get('sites').json(),
+  list: () => request.get('sites').json<SiteResource[]>(),
   // The report the site-storage timer refreshes; measuring again is a task.
-  storage: () => request.get('sites/storage').json(),
-  refreshStorage: (name) =>
-    request.post(`sites/${encodeURIComponent(name)}/actions/refresh-storage`).json(),
-  detail: (name) => request.get(`sites/${encodeURIComponent(name)}`).json(),
-  create: (payload) => request.post('sites', { json: payload }).json(),
-  loginLink: (name) => request.post(`sites/${encodeURIComponent(name)}/login`).json(),
+
+  // The report the site-storage timer refreshes; measuring again is a task.
+  storage: () => request.get('sites/storage').json<SiteStorageReport>(),
+
+  refreshStorage: (name: string) =>
+    request.post(`sites/${encodeURIComponent(name)}/actions/refresh-storage`).json<TaskPayload>(),
+
+  detail: (name: string) => request.get(`sites/${encodeURIComponent(name)}`).json<SiteDetail>(),
+
+  create: (payload: Record<string, unknown>) =>
+    request.post('sites', { json: payload }).json<TaskPayload>(),
+
+  loginLink: (name: string) =>
+    request.post(`sites/${encodeURIComponent(name)}/login`).json<SiteLoginLink>(),
+
   configuration: {
-    get: (name) => unwrap(request.get(`sites/${encodeURIComponent(name)}/configuration`).json()),
-    update: (name, patch) =>
+    get: (name: string) =>
+      unwrap(request.get(`sites/${encodeURIComponent(name)}/configuration`).json<SiteConfig>()),
+    update: (name: string, patch: SiteConfig) =>
       unwrap(
-        request.patch(`sites/${encodeURIComponent(name)}/configuration`, { json: patch }).json(),
+        request
+          .patch(`sites/${encodeURIComponent(name)}/configuration`, { json: patch })
+          .json<SiteConfig>(),
       ),
   },
-  enableTls: (name, email) =>
+
+  enableTls: (name: string, email?: string) =>
     request
       .post(`sites/${encodeURIComponent(name)}/actions/enable-tls`, {
         json: email ? { email } : {},
       })
-      .json(),
-  clearCache: (name) =>
-    request.post(`sites/${encodeURIComponent(name)}/actions/clear-cache`).json(),
-  migrate: (name) => request.post(`sites/${encodeURIComponent(name)}/actions/migrate`).json(),
-  reinstall: (name) => request.post(`sites/${encodeURIComponent(name)}/actions/reinstall`).json(),
-  drop: (name) => request.delete(`sites/${encodeURIComponent(name)}`).json(),
+      .json<TaskPayload>(),
+
+  clearCache: (name: string) =>
+    request.post(`sites/${encodeURIComponent(name)}/actions/clear-cache`).json<TaskPayload>(),
+
+  migrate: (name: string) =>
+    request.post(`sites/${encodeURIComponent(name)}/actions/migrate`).json<MigrationStarted>(),
+
+  reinstall: (name: string) =>
+    request.post(`sites/${encodeURIComponent(name)}/actions/reinstall`).json<TaskPayload>(),
+
+  drop: (name: string) => request.delete(`sites/${encodeURIComponent(name)}`).json<TaskPayload>(),
 
   apps: {
-    list: (name) => request.get(`sites/${encodeURIComponent(name)}/apps`).json(),
-    install: (name, payload) =>
+    list: (name: string) => request.get(`sites/${encodeURIComponent(name)}/apps`).json<SiteApps>(),
+    install: (name: string, payload: Record<string, unknown>) =>
       request
-        .post(`sites/${encodeURIComponent(name)}/apps`, { json: payload, timeout: INLINE_TIMEOUT })
-        .json(),
-    remove: (name, app, { force = false, mode = '' } = {}) =>
+        .post(`sites/${encodeURIComponent(name)}/apps`, { json: payload, timeout: inlineTimeout })
+        .json<EnabledApp | TaskPayload>(),
+    remove: (
+      name: string,
+      app: string,
+      { force = false, mode = '' }: { force?: boolean; mode?: string } = {},
+    ) =>
       request
         .delete(`sites/${encodeURIComponent(name)}/apps/${encodeURIComponent(app)}`, {
           searchParams: { ...(force ? { force: 'true' } : {}), ...(mode ? { mode } : {}) },
-          timeout: INLINE_TIMEOUT,
+          timeout: inlineTimeout,
         })
-        .json(),
+        .json<DisabledApp | TaskPayload>(),
   },
 
   domains: {
-    list: (name) => request.get(`sites/${encodeURIComponent(name)}/domains`).json(),
-    add: (name, domain) =>
-      request.post(`sites/${encodeURIComponent(name)}/domains`, { json: { domain } }).json(),
-    remove: (name, domain) =>
+    list: (name: string) =>
+      request.get(`sites/${encodeURIComponent(name)}/domains`).json<SiteDomains>(),
+    add: (name: string, domain: string) =>
+      request
+        .post(`sites/${encodeURIComponent(name)}/domains`, { json: { domain } })
+        .json<TaskPayload>(),
+    remove: (name: string, domain: string) =>
       request
         .delete(`sites/${encodeURIComponent(name)}/domains/${encodeURIComponent(domain)}`)
-        .json(),
-    setPrimary: (name, domain) =>
+        .json<TaskPayload>(),
+    setPrimary: (name: string, domain: string) =>
       request
         .patch(`sites/${encodeURIComponent(name)}/domains/${encodeURIComponent(domain)}`, {
           json: { primary: true },
         })
-        .json(),
-    dnsRecords: (name, domain) =>
+        .json<TaskPayload>(),
+    dnsRecords: (name: string, domain: string) =>
       request
         .get(`sites/${encodeURIComponent(name)}/domains/${encodeURIComponent(domain)}/dns-records`)
-        .json(),
-    wildcardList: () => request.get('sites/wildcard-domains').json(),
+        .json<DnsRecords>(),
+    wildcardList: () => request.get('sites/wildcard-domains').json<WildcardDomains>(),
   },
 
   monitoring: {
-    get: (name, window) =>
+    get: (name: string, window: string) =>
       request
         .get(`sites/${encodeURIComponent(name)}/monitoring`, { searchParams: { window } })
-        .json(),
+        .json<SiteAnalytics>(),
   },
 
   uptime: {
-    get: (name, window) =>
-      request.get(`sites/${encodeURIComponent(name)}/uptime`, { searchParams: { window } }).json(),
+    get: (name: string, window: string) =>
+      request
+        .get(`sites/${encodeURIComponent(name)}/uptime`, { searchParams: { window } })
+        .json<SiteUptime>(),
   },
 
   backups: {
-    list: (name, limit) =>
+    list: (name: string, limit?: number) =>
       request
         .get(`sites/${encodeURIComponent(name)}/backups`, { searchParams: limit ? { limit } : {} })
-        .json(),
-    create: (name) => request.post(`sites/${encodeURIComponent(name)}/backups`).json(),
-    download: (name, timestamp, fileId) =>
+        .json<Backup[]>(),
+    create: (name: string) =>
+      request.post(`sites/${encodeURIComponent(name)}/backups`).json<TaskPayload>(),
+    download: (name: string, timestamp: string, fileId: string): string =>
       apiUrl(
         `sites/${encodeURIComponent(name)}/backups/${encodeURIComponent(timestamp)}/files/${encodeURIComponent(fileId)}/content`,
       ),
-    downloadLinks: (name, timestamp) =>
+    downloadLinks: (name: string, timestamp: string) =>
       request
         .get(
           `sites/${encodeURIComponent(name)}/backups/${encodeURIComponent(timestamp)}/download-links`,
         )
-        .json(),
+        .json<Record<string, string>>(),
     schedule: {
-      get: (name) => request.get(`sites/${encodeURIComponent(name)}/backup-schedule`).json(),
-      set: (name, payload) =>
-        request.put(`sites/${encodeURIComponent(name)}/backup-schedule`, { json: payload }).json(),
-      remove: (name) => request.delete(`sites/${encodeURIComponent(name)}/backup-schedule`),
+      get: (name: string) =>
+        request.get(`sites/${encodeURIComponent(name)}/backup-schedule`).json<BackupSchedule>(),
+      set: (name: string, payload: Record<string, unknown>) =>
+        request
+          .put(`sites/${encodeURIComponent(name)}/backup-schedule`, { json: payload })
+          .json<BackupSchedule>(),
+      remove: (name: string) => request.delete(`sites/${encodeURIComponent(name)}/backup-schedule`),
     },
   },
 }
