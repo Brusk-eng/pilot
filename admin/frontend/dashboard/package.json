@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "test": "node --test src/utils/*.test.ts",
+    "typecheck": "vue-tsc --noEmit",
     "preview": "vite preview"
   },
   "dependencies": {
