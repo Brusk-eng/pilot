@@ -39,7 +39,7 @@ useSearchShortcut()
 // Remembers the last non-Settings route so dismissing the dialog (backdrop
 // click, Escape, close button) exits to it directly instead of stepping back
 // through every section/subsection push made while the dialog was open.
-const lastNonSettingsRoute = ref(null)
+const lastNonSettingsRoute = ref<string | null>(null)
 
 watch(
   () => route.fullPath,

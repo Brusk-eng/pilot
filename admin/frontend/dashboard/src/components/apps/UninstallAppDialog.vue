@@ -7,6 +7,7 @@ import ActionDialog from '@/components/common/ActionDialog.vue'
 import { apiErrorMessage } from '@/api/client'
 import { sitesApi } from '@/api/sites'
 import { openTaskDetailPage } from '@/utils/taskRoute'
+import { errorMessage } from '@/utils/error'
 
 interface Props {
   app?: Record<string, any> | null
@@ -20,7 +21,7 @@ const props = withDefaults(defineProps<Props>(), {
   app: null,
   canDisable: false,
 })
-const open = defineModel('open')
+const open = defineModel<boolean>('open')
 const emit = defineEmits(['disabled'])
 const router = useRouter()
 
@@ -29,6 +30,7 @@ const working = ref(false)
 const error = ref('')
 
 const appLabel = computed(() => props.app?.title || props.app?.name || '')
+const appName = computed(() => props.app?.name ?? '')
 
 const uninstallWarning = computed(() => ({
   title: `This can't be undone.`,
@@ -64,22 +66,23 @@ const confirmRemoval = async () => {
     if (mode.value === 'disable') await disableApp()
     else await uninstallApp()
   } catch (caught) {
-    error.value = caught.message || 'Could not start removal.'
+    error.value = errorMessage(caught, 'Could not start removal.')
   } finally {
     working.value = false
   }
 }
 
 const disableApp = async () => {
-  const result = await sitesApi.apps.remove(props.siteName, props.app.name, { mode: 'disable' })
-  if (!result.disabled) throw new Error(apiErrorMessage(result, 'Could not disable app.'))
+  const result = await sitesApi.apps.remove(props.siteName, appName.value, { mode: 'disable' })
+  if (!('disabled' in result)) throw new Error(apiErrorMessage(result, 'Could not disable app.'))
   open.value = false
-  emit('disabled', props.app.name)
+  emit('disabled', appName.value)
 }
 
 const uninstallApp = async () => {
-  const result = await sitesApi.apps.remove(props.siteName, props.app.name)
-  if (!result.task_id) throw new Error(apiErrorMessage(result, 'Uninstall failed.'))
+  const result = await sitesApi.apps.remove(props.siteName, appName.value)
+  if ('disabled' in result || !result.task_id)
+    throw new Error(apiErrorMessage(result, 'Uninstall failed.'))
   open.value = false
   openTaskDetailPage(router, result.task_id)
 }
@@ -109,7 +112,9 @@ const uninstallApp = async () => {
         <span class="mt-0.5 size-4 text-ink-gray-6 shrink-0" :class="option.icon" />
         <span class="min-w-0">
           <span class="block text-ink-gray-8">{{ option.label }}</span>
-          <span class="block mt-0.5 text-ink-gray-5 text-p-sm leading-5">{{ option.description }}</span>
+          <span class="block mt-0.5 text-ink-gray-5 text-p-sm leading-5"
+            >{{ option.description }}</span
+          >
         </span>
       </button>
     </div>

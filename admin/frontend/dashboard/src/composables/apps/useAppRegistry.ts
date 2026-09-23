@@ -1,9 +1,10 @@
 import { computed, ref } from 'vue'
+import type { AvatarTheme } from 'frappe-ui'
 
 import { appsApi } from '@/api/apps'
 import type { MarketplaceApp } from '@/types/apps'
 
-const THEMES = ['violet', 'blue', 'green', 'amber', 'red']
+const THEMES: AvatarTheme[] = ['violet', 'blue', 'green', 'amber', 'red']
 export const FRAPPE_LOGO_URL =
   'https://raw.githubusercontent.com/frappe/frappe/refs/heads/develop/.github/framework-logo-new.svg'
 

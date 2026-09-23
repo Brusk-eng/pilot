@@ -6,7 +6,7 @@ export type WafCondition = {
 }
 
 export type WafRule = {
-  match?: 'all' | 'any'
+  match?: string
   action?: string
   conditions?: WafCondition[]
 }

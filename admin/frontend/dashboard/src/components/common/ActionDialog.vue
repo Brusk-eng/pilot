@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { Avatar, Button, Dialog, ErrorMessage } from 'frappe-ui'
+import { Avatar, Button, type ButtonProps, Dialog, type DialogSize, ErrorMessage } from 'frappe-ui'
 
 import AppIcon from '@/components/apps/AppIcon.vue'
 
 interface Props {
   title: string
-  size?: string
+  size?: DialogSize
   // { label, description, badge, icon } - `icon` picks a lucide tile, otherwise
   // the app logo is used via { name, logo }.
   subject?: Record<string, any> | null
@@ -13,7 +13,7 @@ interface Props {
   warning?: Record<string, any> | null
   error?: string
   confirmLabel: string
-  confirmTheme?: string
+  confirmTheme?: ButtonProps['theme']
   cancelLabel?: string
   loading?: boolean
   disabled?: boolean
@@ -30,7 +30,7 @@ withDefaults(defineProps<Props>(), {
   disabled: false,
 })
 
-const open = defineModel('open')
+const open = defineModel<boolean>('open')
 const emit = defineEmits(['confirm'])
 </script>
 
@@ -81,7 +81,6 @@ const emit = defineEmits(['confirm'])
       <slot name="after-warning" />
 
       <ErrorMessage v-if="error" :message="error" />
-
     </div>
 
     <template #actions>

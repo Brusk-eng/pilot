@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Sidebar, SidebarHeader, SidebarLabel, SidebarItem, SidebarCollapseToggle } from 'frappe-ui'
+import { Sidebar, SidebarCollapseToggle, SidebarHeader, SidebarItem, SidebarLabel } from 'frappe-ui'
 
 import PilotLogo from '@/components/icons/Pilot.vue'
 import NotificationsPanel from '@/components/notifications/NotificationsPanel.vue'
@@ -30,7 +30,7 @@ const visibleSections = computed(() =>
     .filter((section) => section.items.length),
 )
 
-const isActive = (to) => route.path === to || route.path.startsWith(`${to}/`)
+const isActive = (to: string) => route.path === to || route.path.startsWith(`${to}/`)
 </script>
 
 <template>

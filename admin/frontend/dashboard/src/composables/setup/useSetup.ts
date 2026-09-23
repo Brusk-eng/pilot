@@ -1,4 +1,4 @@
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
 
 import { apiErrorMessage, hasApiError } from '@/api/client'
 import { gitApi } from '@/api/git'
@@ -50,7 +50,7 @@ export const useSetup = () => {
   const mariadbLocalAvailable = ref(false)
   const postgresLocalAvailable = ref(false)
 
-  const terminal = ref<TerminalHandle | null>(null)
+  const terminal = useTemplateRef<TerminalHandle>('terminal')
   const setupTaskId = ref('')
   const streamUrl = ref('')
   const streamStatus = ref('Starting…')

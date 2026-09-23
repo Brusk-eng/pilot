@@ -2,8 +2,9 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { Alert, Button, ErrorMessage, Select, Spinner, TextInput, toast } from 'frappe-ui'
 
-import { apiErrorMessage } from '@/api/client'
 import { settingsApi } from '@/api/settings'
+import type { S3ProviderOption } from '@/types/settings'
+import { errorMessage } from '@/utils/error'
 
 const loading = ref(true)
 const saving = ref(false)
@@ -15,7 +16,7 @@ const bucket = ref('')
 const provider = ref('')
 const region = ref('')
 const secretKeySet = ref(false)
-const providers = ref([])
+const providers = ref<S3ProviderOption[]>([])
 
 const connected = computed(() => Boolean(accessKey.value && bucket.value && secretKeySet.value))
 const providerLabel = computed(
@@ -59,7 +60,7 @@ const load = async () => {
     region.value = s3.region || ''
     secretKeySet.value = !!s3.secret_key_set
   } catch (e) {
-    error.value = e.message || 'Could not load settings.'
+    error.value = errorMessage(e, 'Could not load settings.')
   } finally {
     loading.value = false
   }
@@ -69,7 +70,7 @@ const save = async () => {
   saving.value = true
   error.value = ''
   try {
-    const result = await settingsApi.update({
+    await settingsApi.update({
       s3: {
         access_key: accessKey.value.trim(),
         secret_key: secretKey.value.trim(),
@@ -78,15 +79,11 @@ const save = async () => {
         region: region.value,
       },
     })
-    if (!result.error) {
-      secretKey.value = ''
-      toast.success('Object storage settings saved')
-      await load()
-    } else {
-      error.value = apiErrorMessage(result, 'Could not save object storage settings.')
-    }
+    secretKey.value = ''
+    toast.success('Object storage settings saved')
+    await load()
   } catch (e) {
-    error.value = e.message || 'Could not save object storage settings.'
+    error.value = errorMessage(e, 'Could not save object storage settings.')
   } finally {
     saving.value = false
   }
@@ -95,20 +92,16 @@ const save = async () => {
 const disconnect = async () => {
   disconnecting.value = true
   try {
-    const result = await settingsApi.update({ s3: { disconnect: true } })
-    if (!result.error) {
-      accessKey.value = ''
-      secretKey.value = ''
-      bucket.value = ''
-      provider.value = providers.value[0]?.value || ''
-      region.value = ''
-      secretKeySet.value = false
-      toast.success('Object storage disconnected')
-    } else {
-      toast.error(apiErrorMessage(result, 'Could not disconnect object storage.'))
-    }
+    await settingsApi.update({ s3: { disconnect: true } })
+    accessKey.value = ''
+    secretKey.value = ''
+    bucket.value = ''
+    provider.value = providers.value[0]?.value || ''
+    region.value = ''
+    secretKeySet.value = false
+    toast.success('Object storage disconnected')
   } catch (e) {
-    toast.error(e.message || 'Could not disconnect object storage.')
+    toast.error(errorMessage(e, 'Could not disconnect object storage.'))
   } finally {
     disconnecting.value = false
   }

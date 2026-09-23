@@ -13,6 +13,13 @@ import { useBreadcrumbs } from '@/composables/common/useBreadcrumbs'
 import { processLine } from '@/utils/ansi'
 import { fmtDateTime, fmtDuration } from '@/utils/taskFormat'
 import { opTitle, patchSkipped, pendingActionLabel, siteStatus } from '@/utils/updateFormat'
+import type {
+  MigrationAccepted,
+  MigrationApp,
+  MigrationSite,
+  MigrationSummary,
+} from '@/types/migrations'
+import { errorMessage } from '@/utils/error'
 
 interface Props {
   operationId: string
@@ -22,14 +29,14 @@ const props = defineProps<Props>()
 const router = useRouter()
 const { setBreadcrumbs } = useBreadcrumbs()
 
-const op = ref(null)
+const op = ref<MigrationSummary | null>(null)
 const loading = ref(false)
 const refreshing = ref(false)
 const acting = ref(false)
 const error = ref('')
 const confirmSkip = ref(false)
 const confirmRestore = ref(false)
-let timer = null
+let timer: ReturnType<typeof setTimeout> | undefined
 
 const title = computed(() => opTitle(op.value))
 const isAttention = computed(() => needsAttention(op.value))
@@ -68,22 +75,23 @@ const sitesCount = computed(() => {
   return `${sites.length}`
 })
 
-const startedAt = computed(() => (op.value.started_at ? fmtDateTime(op.value.started_at) : ''))
+const startedAt = computed(() => (op.value?.started_at ? fmtDateTime(op.value.started_at) : ''))
 
 const duration = computed(() => fmtDuration(durationSeconds.value))
 
-const openTaskLog = (log) => router.push({ name: 'TaskDetail', params: { taskId: log.id } })
+const openTaskLog = (log: { id: string }) =>
+  router.push({ name: 'TaskDetail', params: { taskId: log.id } })
 
-const expandedSites = ref(new Set())
+const expandedSites = ref(new Set<string>())
 
-const toggleSiteJobs = (siteName) => {
+const toggleSiteJobs = (siteName: string) => {
   if (!siteJobs(siteName).length) return
   const expanded = new Set(expandedSites.value)
   if (!expanded.delete(siteName)) expanded.add(siteName)
   expandedSites.value = expanded
 }
 
-const siteJobs = (siteName) => {
+const siteJobs = (siteName: string) => {
   return (op.value?.task_logs || []).filter((log) => log.site === siteName)
 }
 
@@ -93,8 +101,8 @@ const load = async () => {
     error.value = ''
     applyOpenDefaults()
     setBreadcrumbs([{ label: 'Updates', route: { name: 'Updates' } }, { label: title.value }])
-  } catch (e) {
-    error.value = e?.message || 'Could not load this update.'
+  } catch (caught) {
+    error.value = errorMessage(caught, 'Could not load this update.')
   } finally {
     schedule()
   }
@@ -116,13 +124,13 @@ const schedule = () => {
   }
 }
 
-const runAction = async (action) => {
+const runAction = async (action: () => Promise<MigrationAccepted>) => {
   acting.value = true
   try {
     op.value = (await action()).operation || op.value
     await load()
-  } catch (e) {
-    error.value = e?.message || 'Action failed.'
+  } catch (caught) {
+    error.value = errorMessage(caught, 'Action failed.')
   } finally {
     acting.value = false
   }
@@ -135,13 +143,16 @@ const doRestore = () => {
 }
 const doSkip = () => {
   confirmSkip.value = false
-  return runAction(() => updatesApi.bypassPatch(props.operationId, op.value.diagnosis.patch))
+  const patch = op.value?.diagnosis?.patch
+  if (!patch) return
+
+  return runAction(() => updatesApi.bypassPatch(props.operationId, patch))
 }
 
-const shortSha = (sha) => sha?.slice(0, 7) || '—'
+const shortSha = (sha: string | null | undefined) => sha?.slice(0, 7) || '—'
 
 // Green sha = the checkout happened; gray = still just the plan.
-const revisionHint = (app) => {
+const revisionHint = (app: MigrationApp) => {
   const target = shortSha(app.updated_sha || app.target_sha)
   return app.updated_sha ? `Updated to ${target}` : `Will update to ${target}`
 }
@@ -167,7 +178,7 @@ const applyOpenDefaults = () => {
   appsOpen.value = !settled
 }
 
-const siteCaption = (site) => {
+const siteCaption = (site: MigrationSite) => {
   const status = siteStatus(site)
   if (status.value === 'pending') return ''
   if (status.value === 'success') return 'Migrated'

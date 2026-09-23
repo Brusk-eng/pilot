@@ -11,7 +11,7 @@ import {
 } from 'frappe-ui'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { apiErrorMessage } from '@/api/client'
+import { apiErrorMessage, hasApiError } from '@/api/client'
 import { sitesApi } from '@/api/sites'
 import EmptyState from '@/components/common/EmptyState.vue'
 import StickyToolbar from '@/components/common/StickyToolbar.vue'
@@ -23,6 +23,8 @@ import { useSiteStorage } from '@/composables/sites/useSiteStorage'
 import { useSites } from '@/composables/sites/useSites'
 import { openSiteLogin } from '@/utils/siteLogin'
 import { openTaskDetailPage } from '@/utils/taskRoute'
+import type { SiteResource } from '@/types/sites'
+import { errorMessage } from '@/utils/error'
 
 const route = useRoute()
 const router = useRouter()
@@ -54,7 +56,7 @@ const statusOptions = [
   { label: 'Creating', value: 'provisioning' },
 ]
 
-const siteStatus = (site) => {
+const siteStatus = (site: SiteResource) => {
   // Provisioning wins over "offline": the site dir/site_config.json may not
   // exist yet in the earliest moments of a new-site/reinstall task.
   if (site.provisioning) return 'provisioning'
@@ -63,15 +65,15 @@ const siteStatus = (site) => {
   return 'online'
 }
 
-const statusInfo = (site) => SITE_STATUS[siteStatus(site)]
+const statusInfo = (site: SiteResource) => SITE_STATUS[siteStatus(site)]
 
-const appsLabel = (site) => {
+const appsLabel = (site: SiteResource) => {
   const count = site.active_apps?.length || 0
   return count === 1 ? '1 app' : `${count} apps`
 }
 
 // Storage lands after the list, so a card shows its app count alone until then.
-const metaLabel = (site) => {
+const metaLabel = (site: SiteResource) => {
   const used = storageLabel(site.name)
   return used ? `${used} · ${appsLabel(site)}` : appsLabel(site)
 }
@@ -106,31 +108,31 @@ const listRows = computed(() =>
   })),
 )
 
-const loginAsAdmin = async (site) => {
+const loginAsAdmin = async (site: SiteResource) => {
   return openSiteLogin(() => sitesApi.loginLink(site.name), {
     onHint: (hint) => toast.info(hint),
   })
 }
 
-const openSite = (site) => {
+const openSite = (site: SiteResource) => {
   toast.promise(loginAsAdmin(site), {
     loading: 'Logging in as admin',
     success: 'Logged in as admin',
-    error: (caught) => caught?.message || 'Could not log in as admin',
+    error: (caught: unknown) => errorMessage(caught, 'Could not log in as admin'),
   })
 }
 
-const backupNow = async (site) => {
+const backupNow = async (site: SiteResource) => {
   try {
     const result = await sitesApi.backups.create(site.name)
-    if (result.ok) openTaskDetailPage(router, result.task_id)
-    else toast.error(apiErrorMessage(result, 'Could not start backup'))
+    if (hasApiError(result)) toast.error(apiErrorMessage(result, 'Could not start backup'))
+    else openTaskDetailPage(router, result.task_id)
   } catch (caught) {
-    toast.error(caught.message || 'Could not start backup')
+    toast.error(errorMessage(caught, 'Could not start backup'))
   }
 }
 
-const siteMenuOptions = (site) => {
+const siteMenuOptions = (site: SiteResource) => {
   return [
     { label: 'Open site', icon: 'lucide-external-link', onClick: () => openSite(site) },
     { label: 'Back up now', icon: 'lucide-archive', onClick: () => backupNow(site) },

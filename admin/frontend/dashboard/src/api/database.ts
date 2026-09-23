@@ -15,6 +15,7 @@ import type {
   TableSize,
   UnsupportedDatabaseDiagnostics,
 } from '@/types/database'
+import type { TaskPayload } from '@/types/tasks'
 
 export const databaseApi = {
   sites: () => request.get('database/sites').json<DatabaseSite[]>(),
@@ -72,7 +73,7 @@ export const databaseApi = {
           json: { value },
           headers: { 'Idempotency-Key': idempotencyKey },
         })
-        .json<DatabaseConfigurationSnapshot>(),
+        .json<TaskPayload>(),
   },
 
   quickActions: {
@@ -82,27 +83,27 @@ export const databaseApi = {
         .post('database/quick-actions/restart', {
           headers: { 'Idempotency-Key': idempotencyKey },
         })
-        .json<ActionStatus>(),
+        .json<TaskPayload>(),
     setPerformanceSchema: (enabled: boolean, idempotencyKey: string) =>
       request
         .post('database/quick-actions/performance-schema', {
           json: { enabled },
           headers: { 'Idempotency-Key': idempotencyKey },
         })
-        .json<ActionStatus>(),
+        .json<TaskPayload>(),
     setInnoDBBufferPoolSize: (sizeMb: number, idempotencyKey: string) =>
       request
         .post('database/quick-actions/innodb-buffer-pool-size', {
           json: { size_mb: sizeMb },
           headers: { 'Idempotency-Key': idempotencyKey },
         })
-        .json<ActionStatus>(),
+        .json<TaskPayload>(),
     setMaxConnections: (maxConnections: number, idempotencyKey: string) =>
       request
         .post('database/quick-actions/max-connections', {
           json: { max_connections: maxConnections },
           headers: { 'Idempotency-Key': idempotencyKey },
         })
-        .json<ActionStatus>(),
+        .json<TaskPayload>(),
   },
 }

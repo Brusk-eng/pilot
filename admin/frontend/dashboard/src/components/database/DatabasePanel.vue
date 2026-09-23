@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
 import { Badge, Button } from 'frappe-ui'
+import { computed, ref, watch } from 'vue'
 
 import Collapsable from '@/components/common/Collapsable.vue'
 
