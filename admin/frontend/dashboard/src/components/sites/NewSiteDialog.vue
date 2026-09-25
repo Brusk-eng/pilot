@@ -11,9 +11,10 @@ import { useAppRegistry } from '@/composables/apps/useAppRegistry'
 import { buildSiteAppChoices } from '@/utils/siteApps'
 import type { AppInfo } from '@/types/apps'
 import { errorMessage } from '@/utils/error'
+import type { SiteResource } from '@/types/sites'
 
 interface Props {
-  sites?: any[]
+  sites?: SiteResource[]
 }
 
 withDefaults(defineProps<Props>(), {

@@ -14,7 +14,13 @@ interface BenchBranch {
   label: string | null
 }
 
-interface MarketplaceListing extends MarketplaceApp {
+export interface WorksWithOption {
+  name: string
+  title: string
+  logo_url: string
+}
+
+export interface MarketplaceListing extends MarketplaceApp {
   installed: boolean
   compatible: boolean
   needs: string
@@ -111,7 +117,7 @@ export const useMarketplace = (initialSiteName = '') => {
   }
 
   // Only Frappe-made apps that some marketplace app depends on.
-  const worksWithOptions = computed(() => {
+  const worksWithOptions = computed<WorksWithOption[]>(() => {
     const names = new Set(registry.value.flatMap((app) => Object.keys(app.dependencies || {})))
     return [...names]
       .map((name) => registry.value.find((app) => app.name === name))

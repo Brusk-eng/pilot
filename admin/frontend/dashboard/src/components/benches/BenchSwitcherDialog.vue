@@ -17,6 +17,7 @@ import LucideSquare from '~icons/lucide/square'
 import LucideTrash2 from '~icons/lucide/trash-2'
 
 import ActionMenu from '@/components/common/ActionMenu.vue'
+import type { ActionMenuOption } from '@/components/common/actionMenu'
 import Table from '@/components/common/Table.vue'
 
 import { useBenches } from '@/composables/benches/useBenches'
@@ -136,7 +137,7 @@ const openBench = (bench: BenchResource) => {
 }
 
 const menuOptions = (bench: BenchResource) => {
-  const opts = []
+  const opts: ActionMenuOption[] = []
   if (canOpen(bench))
     opts.push({ label: 'Open', icon: LucideExternalLink, onClick: () => openBench(bench) })
   if (bench.production) {

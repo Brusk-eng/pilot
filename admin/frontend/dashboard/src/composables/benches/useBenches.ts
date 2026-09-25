@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { benchesApi } from '@/api/benches'
 import { apiErrorMessage, hasApiError } from '@/api/client'
 import type { BenchResource } from '@/types/benches'
+import { errorMessage } from '@/utils/error'
 
 type BenchControlAction = 'start' | 'stop' | 'restart'
 
@@ -37,8 +38,8 @@ export const useBenches = () => {
       }
       await load()
       return true
-    } catch (e: any) {
-      error.value = e.message
+    } catch (caught) {
+      error.value = errorMessage(caught, 'Bench action failed')
       return false
     }
   }

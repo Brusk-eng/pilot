@@ -5,6 +5,7 @@ import type { SiteApp } from '@/types/siteApps'
 import type { Backup } from '@/types/siteBackups'
 import type { SiteDetail } from '@/types/sites'
 import { openSiteLogin } from '@/utils/siteLogin'
+import { errorMessage } from '@/utils/error'
 
 type SiteWithConfig = SiteDetail & { site_config: Record<string, unknown> }
 
@@ -69,8 +70,8 @@ export const useSite = (name: string) => {
       store.installable.value = data.installable_apps || []
       store.nginxEnabled.value = data.nginx_enabled ?? false
       store.adminTls.value = data.admin_tls ?? false
-    } catch (caught: any) {
-      store.error.value = caught.message || 'Failed to load site'
+    } catch (caught) {
+      store.error.value = errorMessage(caught, 'Failed to load site')
       store.site.value = null
     } finally {
       store.loading.value = false

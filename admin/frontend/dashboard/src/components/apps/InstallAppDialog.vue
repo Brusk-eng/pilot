@@ -16,8 +16,13 @@ const openSitePage = (router: Router, siteName: string, app = '') => {
   router.push(app ? { ...route, query: { app, action: 'install-app' } } : route)
 }
 
+interface AppRef {
+  name: string
+  title?: string
+}
+
 interface Props {
-  app?: Record<string, any> | null
+  app?: AppRef | null
   sites?: SiteResource[]
   siteName?: string
 }

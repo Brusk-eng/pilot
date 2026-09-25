@@ -3,14 +3,26 @@ import { Avatar, Button, type ButtonProps, Dialog, type DialogSize, ErrorMessage
 
 import AppIcon from '@/components/apps/AppIcon.vue'
 
+// `icon` picks a lucide tile, otherwise the app logo is used via { name, logo }.
+interface ActionSubject {
+  label?: string
+  name?: string
+  badge?: string
+  description?: string
+  icon?: string
+  logo?: string | null
+}
+
+interface ActionWarning {
+  title: string
+  message?: string
+}
+
 interface Props {
   title: string
   size?: DialogSize
-  // { label, description, badge, icon } - `icon` picks a lucide tile, otherwise
-  // the app logo is used via { name, logo }.
-  subject?: Record<string, any> | null
-  // { title, message } rendered as the destructive-action callout.
-  warning?: Record<string, any> | null
+  subject?: ActionSubject | null
+  warning?: ActionWarning | null
   error?: string
   confirmLabel: string
   confirmTheme?: ButtonProps['theme']
@@ -45,7 +57,7 @@ const emit = defineEmits(['confirm'])
 
           <AppIcon
             v-else
-            :name="subject.name || subject.label"
+            :name="subject.name || subject.label || ''"
             :label="subject.label"
             :logo="subject.logo || ''"
             size="xl"

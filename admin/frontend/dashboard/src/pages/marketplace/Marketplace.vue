@@ -13,6 +13,7 @@ import ChooseSiteDialog from '@/components/sites/ChooseSiteDialog.vue'
 
 import { useMarketplace } from '@/composables/apps/useMarketplace'
 import { useIsMobile } from '@/composables/common/useIsMobile'
+import type { MarketplaceListing } from '@/composables/apps/useMarketplace'
 
 const isMobile = useIsMobile()
 const route = useRoute()
@@ -54,7 +55,7 @@ const filteredHeading = computed(() => {
 const showChooseSite = ref(false)
 const showInstallApp = ref(false)
 const showAddFromGithub = ref(false)
-const installTarget = ref<Record<string, unknown> | null>(null)
+const installTarget = ref<MarketplaceListing | null>(null)
 
 watch(
   () => route.query.addFromGithub,
@@ -66,7 +67,7 @@ watch(
   { immediate: true },
 )
 
-const onInstall = (app: Record<string, unknown>) => {
+const onInstall = (app: MarketplaceListing) => {
   installTarget.value = app
   showInstallApp.value = true
 }

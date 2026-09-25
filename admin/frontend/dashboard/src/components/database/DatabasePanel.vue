@@ -7,7 +7,7 @@ import Collapsable from '@/components/common/Collapsable.vue'
 interface Props {
   title: string
   subtitle?: string
-  badge?: string | any[]
+  badge?: string | string[]
   loading?: boolean
   hideChevron?: boolean
 }

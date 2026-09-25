@@ -2,8 +2,10 @@
 import { Button } from 'frappe-ui'
 import { onBeforeUnmount, ref } from 'vue'
 
+import type { ActionMenuOption } from '@/components/common/actionMenu'
+
 interface Props {
-  options?: any[]
+  options?: ActionMenuOption[]
 }
 
 const props = withDefaults(defineProps<Props>(), {

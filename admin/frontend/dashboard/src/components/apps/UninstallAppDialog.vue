@@ -9,8 +9,16 @@ import { sitesApi } from '@/api/sites'
 import { openTaskDetailPage } from '@/utils/taskRoute'
 import { errorMessage } from '@/utils/error'
 
+interface AppRef {
+  name: string
+  title?: string
+  label?: string
+  description?: string
+  logo_url?: string | null
+}
+
 interface Props {
-  app?: Record<string, any> | null
+  app?: AppRef | null
   siteName: string
   // Only marketplace apps can be disabled - a disabled app is re-enabled by
   // installing it again, which needs the app to still be in the catalog.
