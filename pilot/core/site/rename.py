@@ -9,7 +9,7 @@ from pilot.exceptions import BenchError
 from pilot.utils import normalize_host, write_private_text
 
 if TYPE_CHECKING:
-    from pilot.config import SiteConfig
+    from pilot.config import RoutePolicy, SiteConfig
     from pilot.core.site import Site
 
 
@@ -24,6 +24,8 @@ class SiteRename:
         self.keep_old_hostname = keep_old_hostname
         self._compatibility_link: Path | None = None
         self._original_site_config: str | None = None
+        self._old_pilot_auth_token = ""
+        self._new_route: RoutePolicy | None = None
 
     @property
     def new_path(self) -> Path:
@@ -43,6 +45,7 @@ class SiteRename:
         try:
             self._pin_certificate_name()
             self._carry_old_hostname()
+            self._refresh_pilot_auth_token()
             self._update_default_site(self.old_name, self.new_name)
             self._rename_in_bench_toml(self.old_name, self.new_name)
             self._retarget_hostname_aliases(self.old_name, self.new_name)
@@ -54,6 +57,9 @@ class SiteRename:
             # nginx still names the old site, so restore that state.
             self._roll_back(on_progress)
             raise
+        # Revocation can commit before its durability sync reports failure. The rename
+        # must stay committed once this starts, or rollback could restore a dead token.
+        self._revoke_old_pilot_auth_token()
         # Release the old route only after nginx has switched.
         if not self.keep_old_hostname:
             self._release_route(self.old_name)
@@ -101,7 +107,7 @@ class SiteRename:
     def _register_route(self, hostname: str) -> None:
         from pilot.core.adapters.domain_provider import DomainRouteProvider
 
-        DomainRouteProvider(self.bench).register(hostname, hostname)
+        self._new_route = DomainRouteProvider(self.bench).register(hostname, hostname)
 
     def _release_route(self, hostname: str) -> None:
         """Best effort: the provider warns rather than raising."""
@@ -196,13 +202,14 @@ class SiteRename:
         ]
 
     def _site_config_from(self, config: dict) -> "SiteConfig":
-        from pilot.config import SiteConfig
+        from pilot.config import RoutePolicy, SiteConfig
 
         return SiteConfig(
             name=self.new_name,
             apps=[],
             domains=config.get("domains") or [],
             ssl=bool(config.get("ssl")),
+            route=RoutePolicy.from_dict(config["route"]) if config.get("route") else None,
         )
 
     def _carry_old_hostname(self) -> None:
@@ -217,20 +224,48 @@ class SiteRename:
         ]
         known = {normalize_host(_domain_name(entry)) for entry in domains}
         if self.keep_old_hostname and normalize_host(self.old_name) not in known:
-            domains.append(self.old_name)
+            old_route = self.site.config.route
+            domains.append(
+                {"domain": self.old_name, "route": old_route.to_dict()}
+                if old_route
+                else self.old_name
+            )
         config["domains"] = domains
+        if self._new_route:
+            config["route"] = self._new_route.to_dict()
+            config["ssl"] = self._new_route.public_tls
 
         # A canonical host naming the old site has to move with it, or nginx
         # redirects every request to a hostname this site no longer answers to.
         primary = (config.get("host_name") or "").split("://", 1)[-1]
         if primary and normalize_host(primary) == normalize_host(self.old_name):
-            scheme = "https" if config.get("ssl") else "http"
+            scheme = self._new_route.public_scheme if self._new_route else (
+                "https" if config.get("ssl") else "http"
+            )
             config["host_name"] = f"{scheme}://{self.new_name}"
         self._write_site_config(config)
 
     def _serves_tls(self) -> bool:
         """Whether any site domain terminates TLS on this host."""
         return bool(self._site_config_from(self._read_site_config()).tls_domains)
+
+    def _refresh_pilot_auth_token(self) -> None:
+        config = self._read_site_config()
+        token = config.get("pilot_auth_token")
+        if not isinstance(token, str) or not token:
+            return
+        from admin.backend.internal.session import Session
+
+        self._old_pilot_auth_token = token
+        config["pilot_auth_token"] = Session(self.bench).issue_pilot_token(self.new_name)
+        self._write_site_config(config)
+
+    def _revoke_old_pilot_auth_token(self) -> None:
+        if not self._old_pilot_auth_token:
+            return
+        from admin.backend.internal.session import Session
+
+        Session(self.bench).revoke_token(self._old_pilot_auth_token)
 
     def _read_site_config(self) -> dict:
         return _load_site_config(self.new_path / "site_config.json")

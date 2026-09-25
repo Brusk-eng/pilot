@@ -119,6 +119,8 @@ def build_settings_response(config: BenchConfig, bench_root: Path | None = None)
         "admin": {
             "domain": config.admin.domain,
             "tls": config.admin.tls,
+            "public_scheme": config.admin.route_policy.public_scheme,
+            "public_tls": config.admin.route_policy.public_tls,
         },
         "letsencrypt": {"email": config.letsencrypt.email},
         "s3": s3_payload(config),

@@ -121,12 +121,31 @@ def test_rejects_an_admin_alias_without_an_admin_domain(tmp_path: Path) -> None:
         _command(bench, admin_pattern="admin-vm-*.example.com").run()
 
 
-@pytest.mark.parametrize("sites", [[], ["one.local", "two.local"]])
-def test_rejects_a_site_alias_unless_the_bench_has_one_site(tmp_path: Path, sites: list[str]) -> None:
+def test_rejects_a_site_alias_when_the_bench_has_several_sites(tmp_path: Path) -> None:
     bench = _bench(tmp_path)
-    for site in sites:
-        _make_site(bench, site)
+    _make_site(bench, "one.local")
+    _make_site(bench, "two.local")
 
     with pytest.raises(BenchError, match="only site"):
         _command(bench, site_pattern="site-*.example.com").run()
     assert _central(bench).enabled is False
+
+
+def test_skips_the_site_alias_while_the_bench_has_no_site(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    bench = _bench(tmp_path)
+
+    _command(
+        bench,
+        admin_pattern="admin-vm-*.example.com",
+        site_pattern="site-*.example.com",
+    ).run()
+
+    central = _central(bench)
+    assert central.enabled is True
+    assert [(alias.type, alias.pattern, alias.target) for alias in central.hostname_aliases] == [
+        ("admin", "admin-vm-*.example.com", "admin.example.com"),
+    ]
+    # The operator asked for a site alias and did not get one, so say so.
+    assert "No site to alias yet" in capsys.readouterr().out

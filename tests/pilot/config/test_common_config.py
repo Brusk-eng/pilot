@@ -4,10 +4,10 @@ from pathlib import Path
 
 from pilot.config.central import CentralConfig, HostnameAlias
 from pilot.config.common import CommonConfig
-from pilot.config.datum import DatumConfig
 from pilot.config.letsencrypt import LetsEncryptConfig
 from pilot.config.mariadb import MariaDBConfig
 from pilot.config.postgres import PostgresConfig
+from pilot.config.telemetry import TelemetryConfig
 
 
 def test_path_resolves_next_to_benches_root(tmp_path: Path) -> None:
@@ -33,7 +33,7 @@ def test_write_then_read_round_trips(tmp_path: Path) -> None:
                 )
             ],
         ),
-        datum=DatumConfig(endpoint="https://datum.internal", token="s3cret"),
+        telemetry=TelemetryConfig(endpoint="https://datum.internal", token="s3cret"),
         jwks_url="https://issuer.example.com/jwks.json",
         jwks_audience="bench-fleet",
     )
@@ -72,12 +72,12 @@ def test_central_omitted_from_output_when_unset(tmp_path: Path) -> None:
     assert "[central]" not in CommonConfig.path(tmp_path).read_text()
 
 
-def test_datum_omitted_from_output_when_unset(tmp_path: Path) -> None:
+def test_telemetry_omitted_from_output_when_unset(tmp_path: Path) -> None:
     CommonConfig().write(tmp_path)
     assert "[datum]" not in CommonConfig.path(tmp_path).read_text()
 
 
-def test_datum_is_shared_by_every_bench(tmp_path: Path) -> None:
+def test_telemetry_is_shared_by_every_bench(tmp_path: Path) -> None:
     """Metrics ship to one destination per host, so the config is not per-bench."""
     from pilot.config import BenchConfig
 
@@ -85,11 +85,11 @@ def test_datum_is_shared_by_every_bench(tmp_path: Path) -> None:
     bench_root = benches_root / "main"
     bench_root.mkdir(parents=True)
     (bench_root / "bench.toml").write_text('[bench]\nname = "main"\npython = "3.11"\n')
-    CommonConfig(datum=DatumConfig(endpoint="https://datum.internal", token="s3cret")).write(
+    CommonConfig(telemetry=TelemetryConfig(endpoint="https://datum.internal", token="s3cret")).write(
         benches_root
     )
 
     config = BenchConfig.read(bench_root)
 
-    assert config.datum.endpoint == "https://datum.internal"
-    assert config.datum.is_enabled
+    assert config.telemetry.endpoint == "https://datum.internal"
+    assert config.telemetry.is_shipping_metrics

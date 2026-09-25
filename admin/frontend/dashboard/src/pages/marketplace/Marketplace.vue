@@ -4,6 +4,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AddAppFromGithubDialog from '@/components/apps/AddAppFromGithubDialog.vue'
+import NewAppDialog from '@/components/apps/NewAppDialog.vue'
 import InstallAppDialog from '@/components/apps/InstallAppDialog.vue'
 import PageHero from '@/components/common/PageHero.vue'
 import MarketplaceAppCard from '@/components/marketplace/MarketplaceAppCard.vue'
@@ -55,6 +56,7 @@ const filteredHeading = computed(() => {
 const showChooseSite = ref(false)
 const showInstallApp = ref(false)
 const showAddFromGithub = ref(false)
+const showNewApp = ref(false)
 const installTarget = ref<MarketplaceListing | null>(null)
 
 watch(
@@ -119,6 +121,7 @@ onMounted(load)
     v-model:works-with="worksWith"
     :works-with-options="worksWithOptions"
     @add-from-github="showAddFromGithub = true"
+    @new-app="showNewApp = true"
   />
 
   <div class="px-3 sm:px-4 mx-auto box-content max-w-3xl pb-40">
@@ -209,4 +212,6 @@ onMounted(load)
     :site-name="currentSiteName"
   />
   <AddAppFromGithubDialog v-model:open="showAddFromGithub" :site-name="currentSiteName" />
+
+  <NewAppDialog v-model:open="showNewApp" />
 </template>

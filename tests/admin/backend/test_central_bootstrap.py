@@ -150,14 +150,14 @@ def test_bootstrap_keeps_a_shared_setting_committed_while_it_waited(tmp_path: Pa
     bench = Bench(bench_root)  # holds a view of the shared file from now
 
     with CommonConfig.open(bench_root.parent) as concurrent:
-        concurrent.datum.endpoint = "https://datum.committed-later"
+        concurrent.telemetry.endpoint = "https://datum.committed-later"
 
     with _staged(json.dumps(_ATTRIBUTE)):
         assert apply_central_config(bench) is True
 
     saved = CommonConfig.read(bench_root.parent)
     assert saved.central.bootstrapped is True
-    assert saved.datum.endpoint == "https://datum.committed-later"
+    assert saved.telemetry.endpoint == "https://datum.committed-later"
 
 
 def test_only_one_bootstrap_takes_effect(tmp_path: Path) -> None:

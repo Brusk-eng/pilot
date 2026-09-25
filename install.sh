@@ -574,9 +574,23 @@ ensure_tzdata() {
         macos) return 0 ;;
         unknown) command -v apt-get >/dev/null 2>&1 || return 0 ;;
     esac
-    pkg_installed tzdata && return 0
-    echo "Installing timezone data..."
-    pkg_install tzdata
+    if ! pkg_installed tzdata; then
+        echo "Installing timezone data..."
+        pkg_install tzdata
+    fi
+    ensure_tzdata_legacy
+}
+
+# Ubuntu 24.04 moved the deprecated zone aliases (Asia/Calcutta, US/Eastern) out
+# of tzdata, and zoneinfo cannot load a name the distro does not ship. Fedora and
+# Arch keep them in tzdata, so test for a missing alias instead of a version.
+ensure_tzdata_legacy() {
+    [ -e "${ZONEINFO_DIR:-/usr/share/zoneinfo}/Asia/Calcutta" ] && return 0
+    case "$DISTRO" in
+        fedora|arch) return 0 ;;
+    esac
+    echo "Installing deprecated timezone names..."
+    pkg_install tzdata-legacy || echo "Warning: tzdata-legacy is unavailable; deprecated timezone names such as Asia/Calcutta will not resolve."
 }
 
 # Appends the given PATH line to a file once, if not already there.

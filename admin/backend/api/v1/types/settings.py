@@ -61,6 +61,7 @@ class S3Settings(TypedDict):
     bucket: str
     provider: str
     region: str
+    endpoint_url: str
 
 
 class LLMSettings(TypedDict):

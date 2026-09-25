@@ -13,8 +13,8 @@ def _populated_common() -> CommonConfig:
     common.central.enabled = True
     common.central.bootstrapped = True
     common.proxy.protocol_v2 = True
-    common.datum.endpoint = "https://datum.example.com"
-    common.logs.endpoint = "https://logs.example.com"
+    common.telemetry.endpoint = "https://datum.example.com"
+    common.telemetry.endpoint = "https://logs.example.com"
     common.resource_limits.cpu_usage_limit = 77
     common.jwks_url = "https://issuer.example.com/jwks.json"
     common.jwks_audience = "bench-fleet"
@@ -74,14 +74,14 @@ def test_a_bench_write_keeps_a_setting_committed_after_it_read(tmp_path: Path) -
     stale = BenchConfig.read(bench_root)
 
     with CommonConfig.open(benches) as concurrent:
-        concurrent.datum.endpoint = "https://datum.committed-later"
+        concurrent.telemetry.endpoint = "https://datum.committed-later"
 
     stale.proxy.protocol_v2 = True
     stale.write(bench_root)
 
     saved = CommonConfig.read(benches)
     assert saved.proxy.protocol_v2 is True
-    assert saved.datum.endpoint == "https://datum.committed-later"
+    assert saved.telemetry.endpoint == "https://datum.committed-later"
 
 
 def test_a_bench_write_that_changes_nothing_shared_leaves_the_file_alone(tmp_path: Path) -> None:
@@ -90,12 +90,12 @@ def test_a_bench_write_that_changes_nothing_shared_leaves_the_file_alone(tmp_pat
     stale = BenchConfig.read(bench_root)
 
     with CommonConfig.open(benches) as concurrent:
-        concurrent.logs.endpoint = "https://logs.committed-later"
+        concurrent.telemetry.endpoint = "https://logs.committed-later"
 
     stale.admin.timeout = 200  # a bench-local setting
     stale.write(bench_root)
 
-    assert CommonConfig.read(benches).logs.endpoint == "https://logs.committed-later"
+    assert CommonConfig.read(benches).telemetry.endpoint == "https://logs.committed-later"
 
 
 def test_a_change_in_one_table_keeps_that_tables_other_settings(tmp_path: Path) -> None:

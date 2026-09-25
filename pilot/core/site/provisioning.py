@@ -8,6 +8,7 @@ from pilot.config import SiteConfig
 from pilot.exceptions import BenchError
 
 if TYPE_CHECKING:
+    from pilot.config import RoutePolicy
     from pilot.core.bench import Bench
     from pilot.core.site import Site
 
@@ -31,9 +32,11 @@ class SiteProvisioner:
         from pilot.core.site import Site
 
         via_wildcard = validate_new_site(self.bench, self.name, self.apps)
-        ssl = should_enable_ssl(self.bench, self.name)
+        route = None
         if via_wildcard:
-            register_with_provider(self.bench, self.name)
+            route = register_with_provider(self.bench, self.name)
+        ssl = route.public_tls if route else should_enable_ssl(self.bench, self.name)
+        origin_tls = route.origin_tls if route else ssl
 
         site = Site(
             SiteConfig(
@@ -41,11 +44,13 @@ class SiteProvisioner:
                 apps=self.apps,
                 admin_password=self.admin_password,
                 ssl=ssl,
+                route=route,
             ),
             self.bench,
         )
         on_progress(f"Creating site '{self.name}'...")
         site.create(db_type=self.db_type)
+        self.write_route_policy(site)
         self.install_apps(site, on_progress)
         self.write_pilot_communication_config(site)
         self.bench.write_common_site_config()
@@ -53,9 +58,21 @@ class SiteProvisioner:
         self.build_missing_assets()
         self.add_to_hosts(site)
         self.reload_nginx()
-        if ssl:
+        if origin_tls:
             self.obtain_cert(site, on_progress)
         return site
+
+    def write_route_policy(self, site: "Site") -> None:
+        """Persist provider route metadata after site creation."""
+        if not site.config.route:
+            return
+        from pilot.utils import write_private_text
+
+        path = site.path / "site_config.json"
+        config = json.loads(path.read_text())
+        config["ssl"] = site.config.route.public_tls
+        config["route"] = site.config.route.to_dict()
+        write_private_text(path, json.dumps(config, indent=1))
 
     def install_apps(self, site: "Site", on_progress: Callable[[str], None]) -> None:
         framework = self.bench.config.framework_app.name
@@ -67,17 +84,14 @@ class SiteProvisioner:
 
     def write_pilot_communication_config(self, site: "Site") -> None:
         from admin.backend.internal.session import Session
-        from pilot.utils import admin_url, write_private_text
+        from pilot.utils import write_private_text
 
         config_path = site.path / "site_config.json"
         if not config_path.exists():
             return
         config = json.loads(config_path.read_text())
-        config["pilot_endpoint"] = admin_url(self.bench.config)
-        config["pilot_auth_token"] = Session(self.bench).issue_site_token(
-            site.config.name,
-            ttl=365 * 24 * 3600,
-        )
+        config["pilot_endpoint"] = self.bench.admin_endpoint
+        config["pilot_auth_token"] = Session(self.bench).issue_pilot_token(site.config.name)
         write_private_text(config_path, json.dumps(config, indent=1))
 
     def build_missing_assets(self) -> None:
@@ -179,5 +193,6 @@ def should_enable_ssl(bench: "Bench", name: str) -> bool:
     return letsencrypt_active(bench) and is_public_domain(name)
 
 
-def register_with_provider(bench: "Bench", name: str) -> None:
-    bench.site(name).domains.register(name)
+def register_with_provider(bench: "Bench", name: str) -> "RoutePolicy | None":
+    """Register a site hostname and return its provider route policy."""
+    return bench.site(name).domains.register(name)

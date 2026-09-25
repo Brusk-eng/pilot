@@ -31,6 +31,7 @@ PROTECTED_CONFIG_KEYS = frozenset(
         "installed_apps",
         "pilot_auth_token",
         "pilot_endpoint",
+        "route",
         "ssl",
     }
 )

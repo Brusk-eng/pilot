@@ -124,7 +124,7 @@ def test_forward_unwraps_message_and_targets_method_path() -> None:
     assert "tok-7" in captured["headers"].values()
 
 
-def test_log_token_unwraps_message_and_targets_method_path() -> None:
+def test_datum_token_unwraps_message_and_targets_method_path() -> None:
     _stage_credentials("https://central.test", "tok-8")
     captured: dict = {}
 
@@ -136,11 +136,11 @@ def test_log_token_unwraps_message_and_targets_method_path() -> None:
         )
 
     with patch("pilot.integrations.central.client.urllib.request.urlopen", side_effect=fake_urlopen):
-        result = CentralClient().log_token()
+        result = CentralClient().datum_token()
 
     assert result["token"] == "jwt-123"
     assert result["resource_id"] == "vm-1"
-    assert captured["url"] == "https://central.test/api/method/central.api.pilot.log_token"
+    assert captured["url"] == "https://central.test/api/method/central.api.pilot.datum_token"
     assert captured["method"] == "GET"
 
 

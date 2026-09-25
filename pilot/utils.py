@@ -56,7 +56,7 @@ def make_private_directory(path: Path, *, parents: bool = False) -> None:
 def admin_url(config: "BenchConfig", dev_host: str = "localhost") -> str:
     admin = config.admin
     if config.production.enabled:
-        scheme = "https" if admin.tls else "http"
+        scheme = admin.route_policy.public_scheme
         return f"{scheme}://{admin.domain}"
     return f"http://{dev_host}:{admin.port}"
 

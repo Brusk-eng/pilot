@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pilot.config.datum import DatumConfig
+from pilot.config.telemetry import TelemetryConfig
 
 try:
     from datum_client import Batch, Datum
@@ -33,9 +33,9 @@ class MetricShipper:
     add_* call is a no-op.
     """
 
-    def __init__(self, config: DatumConfig):
+    def __init__(self, config: TelemetryConfig):
         self.config = config
-        ships = HAS_DATUM_CLIENT and config.is_enabled
+        ships = HAS_DATUM_CLIENT and config.is_shipping_metrics
         self.client = Datum(config.endpoint, config.token) if ships else None
         self.batches: list[Batch] = []
 

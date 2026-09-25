@@ -15,6 +15,7 @@ class SiteResource(TypedDict):
 
 class SiteDetail(SiteResource):
     ssl: bool
+    tls: bool
     installable_apps: list[str]
     http_port: int
     nginx_enabled: bool

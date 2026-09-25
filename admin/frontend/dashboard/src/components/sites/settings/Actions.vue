@@ -96,7 +96,7 @@ const Actions = [
     key: 'enable_ssl',
     label: 'Enable SSL',
     description: "Issue a Let's Encrypt certificate and serve this site over HTTPS.",
-    condition: () => nginxEnabled.value && !site.value?.ssl,
+    condition: () => nginxEnabled.value && !site.value?.tls,
     loading: () => sslLoading.value,
     onClick: () => enableSsl(),
   },

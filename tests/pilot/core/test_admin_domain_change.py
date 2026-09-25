@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import PropertyMock, patch
 
@@ -10,6 +11,7 @@ from pilot.config.central import HostnameAlias
 from pilot.config.common import CommonConfig
 from pilot.core.bench import Bench
 from pilot.core.bench.admin_domain import AdminDomainChange
+from pilot.exceptions import BenchError
 from pilot.managers.nginx import NginxManager
 from tests.pilot.integrations.test_central_client import _bench
 
@@ -228,3 +230,136 @@ def test_a_move_to_plain_http_needs_no_certificate(tmp_path: Path) -> None:
 
     assert BenchConfig.read(bench.path).admin.domain == NEW
     assert BenchConfig.read(bench.path).admin.tls is False
+
+
+def _write_site_config(bench: Bench, name: str, config: dict) -> Path:
+    path = bench.sites_path / name / "site_config.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(config))
+    return path
+
+
+def test_a_successful_change_repoints_existing_pilot_endpoints(tmp_path: Path) -> None:
+    bench = _admin_bench(tmp_path)
+    site = _write_site_config(bench, "site1.local", {"db_name": "one", "pilot_endpoint": f"http://{OLD}"})
+    bare_site = _write_site_config(bench, "site2.local", {"db_name": "two"})
+    common = bench.sites_path / "common_site_config.json"
+    common.write_text(json.dumps({"pilot_endpoint": f"http://{OLD}", "monitor": True}))
+
+    with (
+        patch.object(AdminDomainChange, "_republish_nginx"),
+        patch.object(AdminDomainChange, "_reissue_certificate", lambda self, on_progress: False),
+    ):
+        AdminDomainChange(bench, NEW).run()
+
+    assert json.loads(site.read_text()) == {"db_name": "one", "pilot_endpoint": f"http://{NEW}"}
+    assert json.loads(common.read_text()) == {"pilot_endpoint": f"http://{NEW}", "monitor": True}
+    assert "pilot_endpoint" not in json.loads(bare_site.read_text())
+
+
+def test_a_common_site_config_without_pilot_endpoint_is_left_alone(tmp_path: Path) -> None:
+    bench = _admin_bench(tmp_path)
+    common = bench.sites_path / "common_site_config.json"
+    common.parent.mkdir(parents=True, exist_ok=True)
+    common.write_text('{"monitor": true}')
+
+    with (
+        patch.object(AdminDomainChange, "_republish_nginx"),
+        patch.object(AdminDomainChange, "_reissue_certificate", lambda self, on_progress: False),
+    ):
+        AdminDomainChange(bench, NEW).run()
+
+    assert common.read_text() == '{"monitor": true}'
+
+
+def test_a_failed_nginx_publish_leaves_pilot_endpoints_unchanged(tmp_path: Path) -> None:
+    bench = _admin_bench(tmp_path)
+    site = _write_site_config(bench, "site1.local", {"pilot_endpoint": f"http://{OLD}"})
+
+    with (
+        patch.object(AdminDomainChange, "_republish_nginx", side_effect=RuntimeError("nginx is unhappy")),
+        pytest.raises(RuntimeError),
+    ):
+        AdminDomainChange(bench, NEW).run()
+
+    assert json.loads(site.read_text()) == {"pilot_endpoint": f"http://{OLD}"}
+
+
+def test_a_failure_after_repointing_rolls_the_endpoints_back(tmp_path: Path) -> None:
+    bench = _admin_bench(tmp_path)
+    site = _write_site_config(bench, "site1.local", {"pilot_endpoint": f"http://{OLD}"})
+    original = AdminDomainChange.repoint_pilot_endpoints
+    calls = []
+
+    def repoint_then_fail(self) -> None:
+        original(self)
+        calls.append(json.loads(site.read_text())["pilot_endpoint"])
+        if len(calls) == 1:
+            raise RuntimeError("disk is unhappy")
+
+    with (
+        patch.object(AdminDomainChange, "_republish_nginx"),
+        patch.object(AdminDomainChange, "_reissue_certificate", lambda self, on_progress: False),
+        patch.object(AdminDomainChange, "repoint_pilot_endpoints", repoint_then_fail),
+        pytest.raises(RuntimeError),
+    ):
+        AdminDomainChange(bench, NEW).run()
+
+    assert calls == [f"http://{NEW}", f"http://{OLD}"]
+    assert json.loads(site.read_text()) == {"pilot_endpoint": f"http://{OLD}"}
+
+
+def test_a_wildcard_admin_domain_repoints_endpoints_over_https(tmp_path: Path) -> None:
+    bench = _admin_bench(tmp_path)
+    site = _write_site_config(bench, "site1.local", {"pilot_endpoint": f"http://{OLD}"})
+
+    with (
+        patch.object(AdminDomainChange, "_republish_nginx"),
+        patch.object(AdminDomainChange, "_reissue_certificate", lambda self, on_progress: False),
+        patch(
+            "pilot.core.adapters.domain_provider.DomainRouteProvider.wildcard_domains",
+            return_value=["*.zone.example"],
+        ),
+    ):
+        AdminDomainChange(bench, NEW).run()
+
+    assert json.loads(site.read_text()) == {"pilot_endpoint": f"https://{NEW}"}
+
+
+def test_an_admin_domain_outside_the_wildcard_set_keeps_http(tmp_path: Path) -> None:
+    bench = _admin_bench(tmp_path)
+
+    with patch(
+        "pilot.core.adapters.domain_provider.DomainRouteProvider.wildcard_domains",
+        return_value=["*.other.example"],
+    ):
+        assert bench.admin_endpoint == f"http://{OLD}"
+
+
+def test_a_successful_change_clears_the_bench_cache(tmp_path: Path) -> None:
+    bench = _admin_bench(tmp_path)
+    _write_site_config(bench, "site1.local", {"pilot_endpoint": f"http://{OLD}"})
+
+    with (
+        patch.object(AdminDomainChange, "_republish_nginx"),
+        patch.object(AdminDomainChange, "_reissue_certificate", lambda self, on_progress: False),
+        patch.object(Bench, "clear_cache") as clear_cache,
+    ):
+        AdminDomainChange(bench, NEW).run()
+
+    clear_cache.assert_called_once_with()
+
+
+def test_a_cache_clear_failure_does_not_undo_the_change(tmp_path: Path) -> None:
+    bench = _admin_bench(tmp_path)
+    messages = []
+
+    with (
+        patch.object(AdminDomainChange, "_republish_nginx"),
+        patch.object(AdminDomainChange, "_reissue_certificate", lambda self, on_progress: False),
+        patch.object(Bench, "clear_cache", side_effect=BenchError("redis is down")),
+    ):
+        AdminDomainChange(bench, NEW).run(messages.append)
+
+    assert BenchConfig.read(bench.path).admin.domain == NEW
+    assert any("could not clear the site cache" in message for message in messages)

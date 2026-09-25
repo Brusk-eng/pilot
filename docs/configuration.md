@@ -106,19 +106,32 @@ Site-specific settings, including developer mode, live in each site's `site_conf
 
 ### Per-domain TLS
 
-A site answers on its own name plus every entry in its `site_config.json` `domains` list. Each entry is either a bare hostname, which follows the site's `ssl` flag, or a mapping that decides for itself:
+A site answers on its own name plus every entry in its `site_config.json` `domains` list. The `ssl` flag records whether clients use HTTPS for the site. A bare hostname follows that flag for both public and origin TLS. A route mapping decides public and origin TLS separately:
 
 ```json
 {
   "ssl": false,
   "domains": [
     "www.example.com",
-    { "domain": "shop.customer.com", "tls": true }
+    {
+      "domain": "shop.customer.com",
+      "route": {
+        "public_scheme": "https",
+        "origin_scheme": "https",
+        "client_ip_source": "proxy_protocol_v2"
+      }
+    }
   ]
 }
 ```
 
-Pilot renders one vhost per group. Domains that do not terminate TLS here are served as plain HTTP on port 80 and are never redirected to HTTPS - an edge proxy has already terminated them. Domains that do terminate here get an HTTPS vhost plus the usual redirect from port 80, and are the only ones a certificate is requested for. A site whose domains all follow `ssl` behaves exactly as before.
+Pilot creates one virtual host for each origin mode. A provider route can use HTTPS for clients and HTTP for its Pilot origin.
+
+Pilot stores `ssl: true` and shows this route as TLS, but it does not get a certificate. A passthrough route uses HTTPS for both connections.
+
+Pilot gets the passthrough certificate. Pilot also accepts the client IP source from the provider policy.
+
+Pilot keeps the site route policy in `site_config.json`. Each attached domain can have a different route policy.
 
 A domain the certificate does not name is served over HTTP rather than off a certificate that would fail to validate, so a half-finished `--expand` costs only that domain. Certificates are held in a certbot lineage named by the site's `cert_name`, defaulting to the site name; [renaming](commands.md#renaming-without-downtime) pins it so the certificate survives the site changing name.
 
@@ -127,9 +140,10 @@ A domain the certificate does not name is served over HTTP rather than off a cer
 These tables are per-bench unless noted otherwise:
 
 - `[gunicorn]`: Gunicorn settings.
+- `[build]`: manual override for the asset build memory cap.
 - `[firewall]`: firewall behavior.
 - `[waf]`: WAF rules and behavior.
-- `[s3]`: backup storage credentials and bucket settings.
+- `[s3]`: backup storage credentials and bucket settings. Set `endpoint_url` for a custom S3-compatible provider.
 - `[llm]`: admin assistant provider settings.
 - `[resource_limits]`: CPU, memory, disk, uptime, and webhook alerts.
 
@@ -178,17 +192,11 @@ pattern = "vm-*.par-1.frappe.cloud"
 target = "admin.local"
 redirect = true
 
-[proxy]
-protocol_v2 = true
-
-[datum]
-endpoint = "https://datum.internal"
+[telemetry]
+endpoint = "https://telemetry-svc.par-1.frappe.cloud"
 token = ""
-
-[logs]
-endpoint = "https://logs.internal"
-token = ""
-enabled = true
+logs_enabled = true
+metrics_enabled = true
 
 [admin]
 jwks_url = "https://issuer.example.com/jwks.json"
@@ -203,13 +211,21 @@ webhook_endpoints = { "https://alerts.example.com/pilot" = "bearer-token" }
 email_recipients = ["ops@example.com"]
 ```
 
-Shared tables are MariaDB, Postgres, Let's Encrypt, Central, the edge proxy, Datum, logs, resource limits, and the admin JWKS issuer. A bench exposes these values through its own `BenchConfig`; the model merges shared values on read and writes them back to the common file.
+Shared tables are MariaDB, Postgres, Let's Encrypt, Central, the edge proxy, telemetry, resource limits, and the admin JWKS issuer. A bench exposes these values through its own `BenchConfig`; the model merges shared values on read and writes them back to the common file.
 
-Central endpoint and authentication data come from instance metadata. The metadata can also include `initial_jwks_cache`, the issuer's JWK set. Pilot writes it to the JWKS cache before it marks the host bootstrapped, so the first remote token after boot is verified without a fetch. `central.hostname_aliases` maps a VM hostname pattern to its current local target. The VM ID is assigned at runtime, so use `*` for that part. Pilot creates redirect rules only for aliases whose targets exist on the bench. Renaming a site or moving the admin domain re-points the matching alias automatically; remove one when the rule is no longer needed. `pilot setup central` writes these settings - see [Setup Commands](commands.md#setup-commands).
+Central endpoint and authentication data come from instance metadata. While Central is enabled and bootstrap is pending, remote-token verification uses only the current staged JWKS URL, audience, and initial key set from instance metadata. Pilot caches that staged issuer in each Admin process until shared config changes or bootstrap completes. After bootstrap, it clears the staged entry and uses only the issuer saved in shared config. The metadata can include `initial_jwks_cache`, the issuer's JWK set. Pilot uses it to initialize an empty JWKS cache before it marks the host bootstrapped, so the first remote token does not wait for an issuer fetch. It does not replace keys already fetched from the issuer. `central.hostname_aliases` maps a VM hostname pattern to its current local target. The VM ID is assigned at runtime, so use `*` for that part. Pilot creates redirect rules only for aliases whose targets exist on the bench. Renaming a site or moving the admin domain re-points the matching alias automatically; remove one when the rule is no longer needed. `pilot setup central` writes these settings - see [Setup Commands](commands.md#setup-commands).
 
-`[proxy]` describes the edge in front of the host. With `protocol_v2 = true` the HTTPS listener expects PROXY protocol v2 ahead of the TLS handshake, because the edge streams custom domains to port 443 by SNI without unwrapping them; the client address arrives in that header rather than in `X-Forwarded-For`. Leave it off when nothing fronts the host. See [Per-domain TLS](#per-domain-tls).
+The domain provider controls the edge route for each hostname. Its route policy gives Pilot the public scheme, origin scheme, and client IP source.
 
-Datum sends collected metrics only when both endpoint and token are set and the optional `datum` package is installed (`pip install pilot[metrics]`). Logs are written locally regardless of shipping settings.
+Pilot configures PROXY protocol v2 when an HTTPS origin needs it. See [Per-domain TLS](#per-domain-tls).
+
+### Telemetry
+
+`[telemetry]` is one credential for both shippers. `endpoint` is the base URL of the region's Datum, with no path: metrics append `/v1/ingest` and logs append `/v1/logs/ingest`. `token` is the JWT Central mints for the region, which Datum tells apart by route rather than by token, so one serves both. `logs_enabled` and `metrics_enabled` switch each shipper independently.
+
+Either shipper runs only when its switch is on and both `endpoint` and `token` are set. Metrics also need the optional `datum` package (`pip install pilot[metrics]`). Logs are written locally regardless of shipping settings.
+
+`pilot setup telemetry` writes this section and installs the log shipper. Central is asked for the credential when `[central] enabled` is set, and what it returns replaces what is already there, because the token expires. `--endpoint` and `--token` override the fetch. `pilot setup production` does the same, once, before configuring either shipper.
 
 ### Alert Delivery
 
@@ -247,6 +263,6 @@ Saving these through the Admin UI opens a session against the server first, so a
 
 Database passwords are passed through environment variables, not command-line arguments. MariaDB site setup uses a temporary, site-scoped account; Postgres setup requires the configured superuser.
 
-`admin.jwks_url`, `datum.endpoint`, and `llm.api_base` must use `http` or `https`, contain no credentials, and must not target link-local or cloud metadata hosts. Loopback and private addresses are allowed. Validation checks the hostname itself, not where DNS resolves it.
+`admin.jwks_url`, `telemetry.endpoint`, and `llm.api_base` must use `http` or `https`, contain no credentials, and must not target link-local or cloud metadata hosts. Loopback and private addresses are allowed. Validation checks the hostname itself, not where DNS resolves it.
 
 After upgrading an old bench, `merge_common_config` moves host-wide fields from `bench.toml` into `common_config.toml`. Run `pilot admin run-patches` if needed.

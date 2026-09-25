@@ -4,7 +4,7 @@ import shutil
 import typing
 from pathlib import Path
 
-from pilot.config.logs import LogsConfig
+from pilot.config.telemetry import TelemetryConfig
 from pilot.exceptions import BenchError
 from pilot.internal.atomic_file import atomic_write_private_text
 from pilot.internal.template import Template
@@ -21,6 +21,9 @@ if typing.TYPE_CHECKING:
     from pilot.core.bench import Bench
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+# The telemetry endpoint is a base URL; each shipper appends its own route, as the metrics
+# client does. A path in the configured endpoint is not honoured, so the two cannot drift.
+LOGS_PATH = "/v1/logs/ingest"
 
 _CONF_TEMPLATE = Template.from_path(TEMPLATES_DIR / "fluent-bit.conf.template")
 _PARSERS_CONF = (TEMPLATES_DIR / "parsers.conf").read_text()
@@ -68,7 +71,7 @@ class LogsConfigurator(SystemdUserMixin):
             get_package_manager().install("fluent-bit")
         self.state_dir.mkdir(parents=True, exist_ok=True)
 
-    def install(self, config: LogsConfig) -> None:
+    def install(self, config: TelemetryConfig) -> None:
         self._write_configs(config)
         if user_service_installed(self.unit_name):
             self._restart_service()
@@ -88,20 +91,20 @@ class LogsConfigurator(SystemdUserMixin):
             if target.exists():
                 target.unlink()
 
-    def _write_configs(self, config: LogsConfig) -> None:
+    def _write_configs(self, config: TelemetryConfig) -> None:
         self.conf_dir.mkdir(parents=True, exist_ok=True)
         self._write_conf(config)
         (self.conf_dir / "parsers.conf").write_text(_PARSERS_CONF)
         (self.conf_dir / "pilot.lua").write_text(_PILOT_LUA)
         self._write_token(config.token)
 
-    def _write_conf(self, config: LogsConfig) -> None:
+    def _write_conf(self, config: TelemetryConfig) -> None:
         rendered = _CONF_TEMPLATE.render(
             cli_root=cli_root(),
             conf_dir=self.conf_dir,
             host=self._host(config.endpoint),
             port=self._port(config.endpoint),
-            uri=self._uri(config.endpoint),
+            uri=LOGS_PATH,
             tls=config.endpoint.startswith("https://"),
         )
         (self.conf_dir / "fluent-bit.conf").write_text(rendered)
@@ -143,9 +146,3 @@ class LogsConfigurator(SystemdUserMixin):
         parsed = urlparse(endpoint)
         return str(parsed.port or (443 if parsed.scheme == "https" else 80))
 
-    @staticmethod
-    def _uri(endpoint: str) -> str:
-        from urllib.parse import urlparse
-
-        parsed = urlparse(endpoint)
-        return parsed.path or "/v1/logs/ingest"

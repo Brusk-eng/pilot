@@ -15,6 +15,7 @@ import RemoveDomainDialog from '@/components/sites/settings/domains/RemoveDomain
 
 import { apiErrorMessage } from '@/api/client'
 import { sitesApi } from '@/api/sites'
+import type { SiteDomain } from '@/types/siteDomains'
 import { useSite } from '@/composables/sites/useSite'
 import { errorMessage } from '@/utils/error'
 
@@ -22,33 +23,26 @@ interface Props {
   siteName: string
 }
 
-interface DomainRow {
-  domain: string
+interface DomainRow extends SiteDomain {
   isSite: boolean
   isPrimary: boolean
 }
 
 const props = defineProps<Props>()
 
-const { site, nginxEnabled } = useSite(props.siteName)
+const { nginxEnabled } = useSite(props.siteName)
 
-const domains = ref<string[]>([])
-const primaryDomain = ref<string | null>(null)
+const domains = ref<SiteDomain[]>([])
+const primaryDomain = ref('')
 const loading = ref(false)
 const error = ref('')
 
 const domainRows = computed(() => {
-  const rows: DomainRow[] = [
-    {
-      domain: props.siteName,
-      isSite: true,
-      isPrimary: !primaryDomain.value || primaryDomain.value === props.siteName,
-    },
-  ]
-  for (const domain of domains.value) {
-    rows.push({ domain, isSite: false, isPrimary: primaryDomain.value === domain })
-  }
-  return rows
+  return domains.value.map((route) => ({
+    ...route,
+    isSite: route.is_site,
+    isPrimary: route.is_primary,
+  }))
 })
 
 const domainMenuOptions = (row: DomainRow): DropdownItem[] => {
@@ -77,7 +71,7 @@ const loadDomains = async () => {
   try {
     const data = await sitesApi.domains.list(props.siteName)
     domains.value = data.domains || []
-    primaryDomain.value = data.primary || null
+    primaryDomain.value = data.primary || ''
   } catch (e) {
     error.value = errorMessage(e, 'Failed to load domains.')
   } finally {
@@ -129,10 +123,10 @@ watch(nginxEnabled, (enabled) => {
         class="flex justify-between items-start gap-x-2.5 first:mt-1 py-4 border-b border-outline-alpha-gray-1"
       >
         <div class="flex items-start gap-2.5 min-w-0">
-          <Tooltip :text="site?.ssl ? 'SSL active' : 'SSL inactive'">
+          <Tooltip :text="row.tls ? 'TLS active' : 'TLS inactive'">
             <span
               class="mt-0.5 size-4 text-ink-gray-5 shrink-0"
-              :class="site?.ssl ? 'lucide-lock text-ink-green-5' : 'lucide-lock-open'"
+              :class="row.tls ? 'lucide-lock text-ink-green-5' : 'lucide-lock-open'"
             />
           </Tooltip>
 

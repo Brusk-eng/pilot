@@ -32,6 +32,21 @@ def test_create_login_link_returns_url_with_sid(tmp_path: Path) -> None:
     create_session.assert_called_once_with()
 
 
+def test_create_login_link_resolves_a_renamed_sites_old_hostname(tmp_path: Path) -> None:
+    bench_root = tmp_path / "benches" / "current"
+    client = _client(bench_root)
+    _write_site(bench_root, "new.localhost", domains=["old.localhost"])
+
+    with patch(
+        "pilot.core.site.login.SiteLogin.create_session",
+        return_value="frappe-session-id",
+    ):
+        response = client.post("/api/v1/sites/old.localhost/login")
+
+    assert response.status_code == 201
+    assert response.get_json()["url"] == "http://new.localhost:8000/desk?sid=frappe-session-id"
+
+
 def test_create_login_link_hints_when_the_host_does_not_resolve(tmp_path: Path) -> None:
     bench_root = tmp_path / "benches" / "current"
     client = _client(bench_root)

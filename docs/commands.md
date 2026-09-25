@@ -55,6 +55,7 @@ A rename never drops traffic already on the site: requests keep arriving on the 
 
 - The site directory moves while nginx is still sending the old name in `X-Frappe-Site-Name`. The move leaves the old path behind as a symlink until nginx has reloaded, then removes it, so that header always resolves. Both steps are `rename(2)`, so the old path is absent only between two consecutive syscalls.
 - The old hostname would stop being served. It stays on the site as a domain instead, so anyone already on that URL is served rather than dropped. Pass `--release-old-hostname` to give the name up - a pooled hostname a fleet reuses. The domain provider is asked to route the new hostname before anything moves, and a released one is handed back only once the switch has committed.
+- The site's long-lived Admin API token names the site. The rename replaces it with a token scoped to the new name, so the in-app Cloud Settings embed keeps working without letting the old token follow a hostname that is later assigned to another site.
 
 The site keeps whatever redirect policy it had: a canonical `host_name` naming the old site moves with it, and one naming another domain is left alone. A rename never makes the renamed site canonical, which would start redirecting the site's other custom domains to it.
 
@@ -76,7 +77,7 @@ Site behavior belongs on `Site` or a module under `pilot/core/site`.
 - `pilot setup central`: hand the host to Central and alias the VM hostnames it serves.
 - `pilot remove production`: remove production deployment files and services.
 
-`pilot setup central` writes the shared `[central]` settings: it enables Central management and, given `--admin-pattern` or `--site-pattern`, aliases those VM hostname globs to this bench's admin domain and its site. Central manages a host holding one bench, so the command refuses a second one rather than guess which bench a VM hostname belongs to, and `--site-pattern` needs the bench to have exactly one site. The credential itself is never passed in - it arrives through instance metadata, and `--rebootstrap` asks for it to be applied again. Because the bootstrap unit is written only while Central is enabled, the command rebuilds the process set of a bench already in production, restarting its workload.
+`pilot setup central` writes the shared `[central]` settings: it enables Central management and, given `--admin-pattern` or `--site-pattern`, aliases those VM hostname globs to this bench's admin domain and its site. Central manages a host holding one bench, so the command refuses a second one rather than guess which bench a VM hostname belongs to, and `--site-pattern` aliases the bench's only site, skipping the alias while the bench has no site and refusing to guess when it has more than one. The credential itself is never passed in - it arrives through instance metadata, and `--rebootstrap` asks for it to be applied again. Because the bootstrap unit is written only while Central is enabled, the command rebuilds the process set of a bench already in production, restarting its workload.
 
 Production setup uses the bench config and system managers. The command should not duplicate nginx, process manager, or certificate logic.
 

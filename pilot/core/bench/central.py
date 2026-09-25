@@ -40,13 +40,15 @@ class CentralSetup:
         if site:
             on_progress(f"Aliasing {self.site_pattern} to {site.config.name}")
             self.bench.hostname_aliases.set("site", self.site_pattern, site.config.name, self.redirect)
+        elif self.site_pattern:
+            on_progress("No site to alias yet, skipping the site pattern")
         # Central's bootstrap unit is written only while central is enabled, so a host
         # already in production needs its process set rebuilt to grow one.
         self.bench.rebuild_process_set(on_progress)
 
     def check(self) -> "Site | None":
-        """The site to alias, once the host is known to hold a single target for each
-        alias. Aliasing what Central did not provision would take over a live vhost."""
+        """The site to alias, or None while the bench has none. Aliasing what Central did
+        not provision would take over a live vhost."""
         from pilot.internal.validators import validate_hostname_pattern
 
         if others := sorted(config.name for _, config in iter_sibling_benches(self.bench.path)):
@@ -77,8 +79,10 @@ class CentralSetup:
         if not self.site_pattern:
             return None
         sites = self.bench.sites()
-        if len(sites) != 1:
-            listed = ", ".join(site.config.name for site in sites) or "none"
+        if not sites:
+            return None
+        if len(sites) > 1:
+            listed = ", ".join(site.config.name for site in sites)
             raise BenchError(
                 f"--site-pattern aliases the bench's only site, but it has {len(sites)}: {listed}."
             )

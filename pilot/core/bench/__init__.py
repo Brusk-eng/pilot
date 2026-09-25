@@ -380,6 +380,14 @@ class Bench:
 
         BenchProduction(self).setup_nginx(on_progress)
 
+    def resolve_site_name(self, host: str) -> str | None:
+        """Return the directory name of the site that answers to this host."""
+        from pilot.internal.site_paths import site_exists
+
+        if site_exists(self.path, host):
+            return host
+        return self.site_claiming(host)
+
     def site_claiming(self, host: str, ignoring: str = "") -> str | None:
         """Return the site claiming host, excluding one optional site."""
         from pilot.utils import normalize_host
@@ -411,6 +419,32 @@ class Bench:
         if self.site_claiming(pinned, ignoring=site.name) or host_owner(self.path, pinned):
             return site.name
         return pinned
+
+    def clear_cache(self) -> None:
+        """Drop Frappe's cached config and assets for every site in this bench."""
+        from pilot.utils import run_command
+
+        if not self.sites():
+            return
+
+        run_command(
+            [*self.frappe_call, "frappe", "--site", "all", "clear-cache"],
+            cwd=self.sites_path,
+            timeout=120,
+        )
+
+    @property
+    def admin_endpoint(self) -> str:
+        """The admin URL a site stores as `pilot_endpoint`."""
+        from pilot.core.adapters.domain_provider import DomainRouteProvider
+        from pilot.utils import admin_url, matches_wildcard
+
+        admin = self.config.admin
+        url = admin_url(self.config)
+        if admin.route or not self.config.production.enabled or not admin.domain:
+            return url
+        patterns = DomainRouteProvider.wildcard_domains()
+        return f"https://{admin.domain}" if matches_wildcard(admin.domain, patterns) else url
 
     def change_admin_domain(
         self,

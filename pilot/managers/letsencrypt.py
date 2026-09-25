@@ -27,7 +27,10 @@ def _nginx_reload_hook() -> str:
 
 def is_public_domain(domain: str) -> bool:
     """Whether certbot can validate the domain publicly."""
-    return bool(domain) and not domain.endswith(".localhost")
+    domain = domain.strip().lower().rstrip(".")
+    return bool(domain) and domain not in {"local", "localhost"} and not domain.endswith(
+        (".local", ".localhost")
+    )
 
 
 def public_domains(site: "SiteConfig") -> list[str]:
@@ -195,7 +198,8 @@ class LetsEncryptManager:
                 else:
                     self.obtain(site.config)
             except CommandError as exc:
-                print(f"Could not obtain a certificate for '{site.config.name}', skipping: {exc}")
+                domains = ", ".join(f"'{domain}'" for domain in certificate_domains(site.config))
+                print(f"Could not obtain a certificate for {domains} (site '{site.config.name}'), skipping: {exc}")
                 failed.append(site.config.name)
         if self.bench.config.admin.tls and is_public_domain(self.bench.config.admin.domain):
             try:

@@ -12,6 +12,7 @@ from pilot.config.nginx import NginxConfig
 from pilot.config.postgres import PostgresConfig
 from pilot.config.production import VALID_PROCESS_MANAGERS, ProductionConfig
 from pilot.config.redis import RedisConfig
+from pilot.config.route import RoutePolicy
 from pilot.config.s3 import S3Config
 from pilot.config.site import SiteConfig, SiteDomain
 from pilot.config.waf import (
@@ -53,6 +54,7 @@ __all__ = [
     "PostgresConfig",
     "ProductionConfig",
     "RedisConfig",
+    "RoutePolicy",
     "S3Config",
     "SiteConfig",
     "SiteDomain",

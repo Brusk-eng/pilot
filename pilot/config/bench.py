@@ -12,15 +12,14 @@ from typing import Any, ClassVar
 from pilot.config.admin import AdminConfig
 from pilot.config.alert_limit import ResourceLimitConfig
 from pilot.config.app import AppConfig
+from pilot.config.build import BuildConfig
 from pilot.config.central import CentralConfig
 from pilot.config.common import CommonConfig
-from pilot.config.datum import DatumConfig
 from pilot.config.firewall import FirewallConfig, FirewallRule
 from pilot.config.gunicorn import GunicornConfig
 from pilot.config.letsencrypt import LetsEncryptConfig
 from pilot.config.lite_mode import LiteModeConfig
 from pilot.config.llm import LLMConfig
-from pilot.config.logs import LogsConfig
 from pilot.config.mariadb import MariaDBConfig
 from pilot.config.nginx import NginxConfig
 from pilot.config.postgres import PostgresConfig
@@ -28,6 +27,7 @@ from pilot.config.production import ProductionConfig
 from pilot.config.proxy import ProxyConfig
 from pilot.config.redis import RedisConfig
 from pilot.config.s3 import S3Config
+from pilot.config.telemetry import TelemetryConfig
 from pilot.config.waf import WafCondition, WafConfig, WafRule
 from pilot.config.worker import WorkerConfig, WorkerGroup
 from pilot.exceptions import ConfigError
@@ -130,12 +130,12 @@ class BenchConfig:
     lite_mode: LiteModeConfig = field(default_factory=LiteModeConfig)
     nginx: NginxConfig = field(default_factory=NginxConfig)
     gunicorn: GunicornConfig = field(default_factory=GunicornConfig)
+    build: BuildConfig = field(default_factory=BuildConfig)
     letsencrypt: LetsEncryptConfig = field(default_factory=LetsEncryptConfig)
     admin: AdminConfig = field(default_factory=AdminConfig)
     central: CentralConfig = field(default_factory=CentralConfig)
     proxy: ProxyConfig = field(default_factory=ProxyConfig)
-    datum: DatumConfig = field(default_factory=DatumConfig)
-    logs: LogsConfig = field(default_factory=LogsConfig)
+    telemetry: TelemetryConfig = field(default_factory=TelemetryConfig)
     firewall: FirewallConfig = field(default_factory=FirewallConfig)
     waf: WafConfig = field(default_factory=WafConfig)
     s3: S3Config = field(default_factory=S3Config)
@@ -224,8 +224,7 @@ class BenchConfig:
             letsencrypt=common.letsencrypt,
             central=common.central,
             proxy=common.proxy,
-            datum=common.datum,
-            logs=common.logs,
+            telemetry=common.telemetry,
             resource_limits=common.resource_limits,
             **sections,
         )
@@ -265,6 +264,7 @@ class BenchConfig:
         self.workers.validate()
         self.letsencrypt.validate()
         self.gunicorn.validate()
+        self.build.validate()
         self.lite_mode.validate()
         self.production.validate(self.name)
         self.admin.validate(self.production.enabled, self.name)
@@ -331,8 +331,9 @@ class BenchConfig:
 
         endpoints = {
             "admin.jwks_url": self.admin.jwks_url,
-            "datum.endpoint": self.datum.endpoint,
+            "telemetry.endpoint": self.telemetry.endpoint,
             "llm.api_base": self.llm.api_base,
+            "s3.endpoint_url": self.s3.endpoint_url,
         }
         for name, url in endpoints.items():
             if error := validate_external_url(url, name):
@@ -472,8 +473,7 @@ class BenchConfig:
             letsencrypt=self.letsencrypt,
             central=self.central,
             proxy=self.proxy,
-            datum=self.datum,
-            logs=self.logs,
+            telemetry=self.telemetry,
             resource_limits=self.resource_limits,
             jwks_url=self.admin.jwks_url,
             jwks_audience=self.admin.jwks_audience,
@@ -572,6 +572,9 @@ class BenchConfig:
             "max_requests_jitter": self.gunicorn.max_requests_jitter,
         }
 
+    def _build_section(self) -> ConfigDict:
+        return {"memory_limit_mb": self.build.memory_limit_mb}
+
     def _admin_section(self) -> ConfigDict:
         admin: ConfigDict = {
             "port": self.admin.port,
@@ -582,6 +585,8 @@ class BenchConfig:
             "tls": self.admin.tls,
             "allow_bench_management": self.admin.allow_bench_management,
         }
+        if self.admin.route:
+            admin["route"] = self.admin.route.to_dict()
         # jwks_url/jwks_audience are host-shared (common_config.toml), not written here.
         optional_admin = {
             "jwt_secret": self.admin.jwt_secret,
@@ -642,6 +647,7 @@ class BenchConfig:
             "bucket": self.s3.bucket,
             "provider": self.s3.provider,
             "region": self.s3.region,
+            "endpoint_url": self.s3.endpoint_url,
         }
 
     def _llm_section(self) -> ConfigDict:
@@ -758,6 +764,11 @@ _SECTIONS: tuple[_Section, ...] = (
         lambda config: config._gunicorn_section(),
     ),
     _Section(
+        "build",
+        lambda data: BuildConfig.from_dict(data.get("build", {})),
+        lambda config: config._build_section() if config.build.memory_limit_mb else None,
+    ),
+    _Section(
         "admin",
         lambda data: AdminConfig.from_dict(data.get("admin", {})),
         lambda config: config._admin_section(),
@@ -785,6 +796,7 @@ _SECTIONS: tuple[_Section, ...] = (
                 or config.s3.bucket
                 or config.s3.provider
                 or config.s3.region
+                or config.s3.endpoint_url
             )
             else None
         ),
@@ -878,6 +890,7 @@ def _bench_schema() -> _Table:
             "production": _Table(keys=_keys(ProductionConfig) | _PRODUCTION_LEGACY),
             "lite_mode": _Table(keys=_keys(LiteModeConfig)),
             "gunicorn": _Table(keys=_keys(GunicornConfig) | _GUNICORN_LEGACY),
+            "build": _Table(keys=_keys(BuildConfig)),
             "admin": _Table(keys=_keys(AdminConfig)),
             "s3": _Table(keys=_keys(S3Config)),
             "llm": _Table(keys=_keys(LLMConfig)),

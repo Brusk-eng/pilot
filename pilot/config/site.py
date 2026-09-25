@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 
+from pilot.config.route import RoutePolicy
+
 
 @dataclass
 class SiteDomain:
@@ -9,6 +11,7 @@ class SiteDomain:
     # None inherits the site's `ssl`. False is an edge-terminated domain that
     # reaches this host as plain HTTP; True ends TLS here.
     tls: bool | None = None
+    route: RoutePolicy | None = None
 
     @classmethod
     def from_entry(cls, entry) -> "SiteDomain":
@@ -17,10 +20,17 @@ class SiteDomain:
             return entry
         if isinstance(entry, dict):
             tls = entry.get("tls")
-            return cls(name=str(entry.get("domain") or ""), tls=None if tls is None else bool(tls))
+            route = RoutePolicy.from_dict(entry["route"]) if entry.get("route") else None
+            return cls(
+                name=str(entry.get("domain") or ""),
+                tls=None if tls is None else bool(tls),
+                route=route,
+            )
         return cls(name=str(entry))
 
     def to_entry(self) -> "str | dict":
+        if self.route:
+            return {"domain": self.name, "route": self.route.to_dict()}
         return self.name if self.tls is None else {"domain": self.name, "tls": self.tls}
 
 
@@ -35,6 +45,7 @@ class SiteConfig:
     primary_domain: str = ""
     # Certbot lineage name; empty means the current site name.
     cert_name: str = ""
+    route: RoutePolicy | None = None
 
     def __post_init__(self) -> None:
         self.domains = [SiteDomain.from_entry(entry) for entry in self.domains if entry]
@@ -76,8 +87,27 @@ class SiteConfig:
         """Whether this host serves a domain over HTTPS."""
         for entry in self.domains:
             if entry.name == domain:
+                if entry.route:
+                    return entry.route.origin_tls
                 return self.ssl if entry.tls is None else entry.tls
-        return self.ssl
+        return self.route.origin_tls if self.route else self.ssl
+
+    def route_for(self, domain: str) -> RoutePolicy:
+        """Return the configured route or the site's direct-route default."""
+        return self.configured_route_for(domain) or RoutePolicy.direct(self.terminates_tls(domain))
+
+    def configured_route_for(self, domain: str) -> RoutePolicy | None:
+        """Return explicit route metadata for a site domain, if present."""
+        for entry in self.domains:
+            if entry.name == domain and entry.route:
+                return entry.route
+        if domain == self.name and self.route:
+            return self.route
+        return None
+
+    def uses_tls(self, domain: str) -> bool:
+        """Whether clients reach a site domain over HTTPS."""
+        return self.route_for(domain).public_tls
 
     @property
     def tls_domains(self) -> list[str]:

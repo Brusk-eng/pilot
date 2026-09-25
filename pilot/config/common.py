@@ -8,12 +8,11 @@ from pathlib import Path
 
 from pilot.config.alert_limit import ResourceLimitConfig
 from pilot.config.central import CentralConfig
-from pilot.config.datum import DatumConfig
 from pilot.config.letsencrypt import LetsEncryptConfig
-from pilot.config.logs import LogsConfig
 from pilot.config.mariadb import MariaDBConfig
 from pilot.config.postgres import PostgresConfig
 from pilot.config.proxy import ProxyConfig
+from pilot.config.telemetry import TelemetryConfig
 from pilot.internal.atomic_file import exclusive_file_lock, replace_private_text_locked
 from pilot.internal.toml import ConfigDict, Toml
 
@@ -29,8 +28,7 @@ class CommonConfig:
     letsencrypt: LetsEncryptConfig = field(default_factory=LetsEncryptConfig)
     central: CentralConfig = field(default_factory=CentralConfig)
     proxy: ProxyConfig = field(default_factory=ProxyConfig)
-    datum: DatumConfig = field(default_factory=DatumConfig)
-    logs: LogsConfig = field(default_factory=LogsConfig)
+    telemetry: TelemetryConfig = field(default_factory=TelemetryConfig)
     resource_limits: ResourceLimitConfig = field(default_factory=ResourceLimitConfig)
     jwks_url: str = ""
     jwks_audience: str = ""
@@ -57,8 +55,7 @@ class CommonConfig:
             letsencrypt=LetsEncryptConfig.from_dict(data.get("letsencrypt", {})),
             central=CentralConfig.from_dict(data.get("central", {})),
             proxy=ProxyConfig.from_dict(data.get("proxy", {})),
-            datum=DatumConfig.from_dict(data.get("datum", {})),
-            logs=LogsConfig.from_dict(data.get("logs", {})),
+            telemetry=TelemetryConfig.from_dict(data.get("telemetry", {})),
             resource_limits=ResourceLimitConfig(
                 **_known_fields(ResourceLimitConfig, data.get("resource_limits", {}))
             ),
@@ -151,13 +148,12 @@ class CommonConfig:
             }
         if self.proxy != ProxyConfig():
             data["proxy"] = {"protocol_v2": self.proxy.protocol_v2}
-        if self.datum != DatumConfig():
-            data["datum"] = {"endpoint": self.datum.endpoint, "token": self.datum.token}
-        if self.logs != LogsConfig():
-            data["logs"] = {
-                "endpoint": self.logs.endpoint,
-                "token": self.logs.token,
-                "enabled": self.logs.enabled,
+        if self.telemetry != TelemetryConfig():
+            data["telemetry"] = {
+                "endpoint": self.telemetry.endpoint,
+                "token": self.telemetry.token,
+                "logs_enabled": self.telemetry.logs_enabled,
+                "metrics_enabled": self.telemetry.metrics_enabled,
             }
         if self.resource_limits != ResourceLimitConfig():
             data["resource_limits"] = asdict(self.resource_limits)

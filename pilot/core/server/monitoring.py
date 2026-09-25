@@ -371,7 +371,7 @@ def main() -> None:
         monitor.sample_io()
     time.sleep(CPU_SAMPLE_INTERVAL)
 
-    shipper = MetricShipper(monitors[0].bench.config.datum)
+    shipper = MetricShipper(monitors[0].bench.config.telemetry)
     for monitor in monitors:
         monitor.compute_cpu()
         monitor.compute_io()

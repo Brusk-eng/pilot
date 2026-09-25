@@ -48,6 +48,7 @@ const COMMAND_LABELS: Record<string, string> = {
   'install-app': 'Install App',
   'uninstall-app': 'Uninstall App',
   'get-app': 'Get App',
+  'new-app': 'New App',
   'remove-app': 'Remove App',
   'new-site': 'New Site',
   'drop-site': 'Drop Site',
@@ -91,6 +92,7 @@ export const TASK_TYPES = [
       'install-app',
       'uninstall-app',
       'get-app',
+      'new-app',
       'remove-app',
       'get-and-install-app',
       'switch-branch',
@@ -184,6 +186,7 @@ export const taskScope = (task: ScopedTask) => {
 
 const REDIRECT_ON_SUCCESS_COMMANDS = [
   'new-site',
+  'new-app',
   'install-app',
   'uninstall-app',
   'get-and-install-app',
@@ -205,6 +208,7 @@ const APP_ACTION_FOR_COMMAND: Record<string, string> = {
 export const redirectRouteOnSuccess = (task: ScopedTask) => {
   if (!REDIRECT_ON_SUCCESS_COMMANDS.includes(task.command)) return null
   if (task.command === 'drop-site') return { name: 'Sites' }
+  if (task.command === 'new-app') return { name: 'Marketplace' }
   const route = siteRoute(task)
   if (!route) return null
   const appKey = APP_ARG_KEY[task.command]

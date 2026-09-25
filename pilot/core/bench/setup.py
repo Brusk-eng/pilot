@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from pilot.core.bench.admin_domain import ProductionAdminDomain
+from pilot.core.bench.telemetry import apply_credential as apply_telemetry_credential
 from pilot.exceptions import BenchError
 from pilot.utils import write_private_text
 
@@ -60,8 +61,11 @@ class ProductionSetup:
 
             self._build_admin_for_production()
 
-            self._setup_monitoring(on_progress)
-            self._setup_log_shipping(on_progress)
+            # Both shippers present the same credential, so it is fetched once here
+            # rather than by whichever of them happens to run first.
+            apply_telemetry_credential(self.bench, on_progress=on_progress)
+            self._setup_monitoring()
+            self._setup_log_shipping()
             self._persist_production_state()
         except BaseException:
             # A later step failed but the new admin route is already live at the
@@ -141,12 +145,10 @@ class ProductionSetup:
 
             SystemdProcessManager(self.bench).remove_units()
 
-    def _setup_monitoring(self, on_progress: Callable[[str], None] = lambda message: None):
+    def _setup_monitoring(self) -> None:
         from pilot.core.server.monitoring_config import MonitorConfigurator
         from pilot.core.site.storage.systemd import SiteStorageConfigurator
         from pilot.core.site.uptime_monitoring_config import UptimeMonitorConfigurator
-
-        self._apply_metrics_token(on_progress)
 
         monitor = MonitorConfigurator(self.bench)
         monitor.install()
@@ -158,65 +160,17 @@ class ProductionSetup:
 
         SiteStorageConfigurator().install()
 
-    def _apply_metrics_token(self, on_progress: Callable[[str], None]) -> None:
-        """Fetch the Datum metrics JWT from Central when common_config.toml has none."""
-        from pilot.config import BenchConfig
-        from pilot.integrations.central import CentralClient
-        from pilot.integrations.central.client import CentralClientError
-
-        datum = self.bench.config.datum
-        if (datum.token and datum.endpoint) or not self.bench.config.central.enabled:
-            return
-
-        try:
-            token_info = CentralClient().metrics_token()
-            token, endpoint = token_info.get("token"), token_info.get("endpoint")
-        except CentralClientError as exc:
-            on_progress(f"Could not fetch a metrics token from Central: {exc}")
-            return
-        if not token or not endpoint:
-            return
-
-        datum.token, datum.endpoint = token, endpoint
-        with BenchConfig.open(self.bench.path) as config:
-            config.datum.token, config.datum.endpoint = token, endpoint
-
-    def _apply_log_token(self, on_progress: Callable[[str], None]) -> None:
-        """Fetch the Datum logs JWT and endpoint from Central when common_config.toml has none."""
-        from pilot.config import BenchConfig
-        from pilot.integrations.central import CentralClient
-        from pilot.integrations.central.client import CentralClientError
-
-        logs = self.bench.config.logs
-        if (logs.token and logs.endpoint) or not self.bench.config.central.enabled:
-            return
-
-        try:
-            token_info = CentralClient().log_token()
-            token, endpoint = token_info.get("token"), token_info.get("endpoint")
-        except CentralClientError as exc:
-            on_progress(f"Could not fetch a logs token from Central: {exc}")
-            return
-        if not token or not endpoint:
-            return
-
-        logs.token, logs.endpoint = token, endpoint
-        with BenchConfig.open(self.bench.path) as config:
-            config.logs.token, config.logs.endpoint = token, endpoint
-
-    def _setup_log_shipping(self, on_progress: Callable[[str], None] = lambda message: None) -> None:
-        """Install Fluent Bit as a systemd service, if a logs endpoint is configured."""
+    def _setup_log_shipping(self) -> None:
+        """Install Fluent Bit as a systemd service, if this bench has a Datum credential."""
         from pilot.managers.fluentbit import LogsConfigurator
 
-        self._apply_log_token(on_progress)
-
-        log_config = self.bench.config.logs
-        if not log_config.is_enabled:
+        telemetry = self.bench.config.telemetry
+        if not telemetry.is_shipping_logs:
             return
 
         configurator = LogsConfigurator(self.bench)
         configurator.setup()
-        configurator.install(log_config)
+        configurator.install(telemetry)
 
     def _persist_production_state(self) -> None:
         """Write the production state to bench.toml LAST, so the switcher never

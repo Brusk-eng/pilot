@@ -96,7 +96,7 @@ class BenchInventory:
         apps_txt.write_text("\n".join(names) + "\n" if names else "")
 
     def _site_config(self, name: str, raw: dict):
-        from pilot.config import SiteConfig, SiteDomain
+        from pilot.config import RoutePolicy, SiteConfig, SiteDomain
 
         domains = [SiteDomain.from_entry(entry) for entry in (raw.get("domains") or [])]
         domains = [domain for domain in domains if domain.name]
@@ -109,6 +109,7 @@ class BenchInventory:
             domains=domains,
             primary_domain=primary,
             cert_name=str(raw.get("cert_name") or ""),
+            route=RoutePolicy.from_dict(raw["route"]) if raw.get("route") else None,
         )
 
     def _read_site_config(self, path: Path) -> dict:

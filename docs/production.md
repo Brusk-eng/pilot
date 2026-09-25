@@ -27,7 +27,9 @@ pilot setup production --admin-domain admin.example.com
 pilot setup letsencrypt
 ```
 
-`pilot setup production` writes process manager config and nginx integration. `pilot remove production` removes production deployment files and services while keeping logs, certificates, and admin domain config.
+`pilot setup production` writes process manager config and nginx integration, and configures telemetry: it fetches this region's Datum credential from Central once, then sets up the metrics monitor and the log shipper from it. `pilot setup telemetry` does the credential and the log shipper on their own. See [Telemetry](configuration.md#telemetry).
+
+`pilot remove production` removes production deployment files and services while keeping logs, certificates, and admin domain config.
 
 ## Process Managers
 
@@ -56,7 +58,7 @@ Nginx config is rendered from bench and site state. Regenerate it with `pilot se
 Let's Encrypt setup uses configured domains and should run after nginx is rendered. Site domain changes should reload nginx through site/domain code.
 
 With local TLS enabled, `pilot setup production` enables SSL for each existing site with a public site name or custom domain.
-It then requests a certificate for all public domains on each site. Domains that end in `.localhost` stay excluded.
+It then requests a certificate for all public domains on each site. The local-only names `local` and `localhost`, and domains ending in `.local` or `.localhost`, stay excluded.
 
 Public certificate requests need a Let's Encrypt contact email. Pass the email during production setup:
 
@@ -82,6 +84,8 @@ Firewall and WAF config are bench settings. Settings apply code should delegate 
 Asset builds (`pilot build`, and rebuilds triggered from app updates) run capped at 85% of the host's free memory via a transient systemd scope, so a runaway build fails instead of the kernel picking a victim process, usually the database. A full asset build peaks near 1.6GB while an idle bench is around 300MB. Hosts with less free memory than that are refused up front with a clear message rather than started and killed mid-build.
 
 The cap applies only to hosts with `systemd-run` and cgroup memory delegation available; where neither is available the build runs uncapped with a warning. Concurrent builds are not coordinated - each sizes its cap independently from memory free at the time it starts.
+
+To set a fixed cap instead, add `memory_limit_mb` under `[build]` in `bench.toml`. Leave it unset (or 0) to keep the automatic 85% sizing.
 
 ## Operational Notes
 

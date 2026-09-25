@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import contextlib
+import json
 from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pilot.exceptions import BenchError
+from pilot.internal.atomic_file import exclusive_file_lock, replace_private_text_locked
 from pilot.utils import host_owner, matches_wildcard, normalize_host
 
 if TYPE_CHECKING:
+    from pilot.config import RoutePolicy
     from pilot.core.bench import Bench
 
 
@@ -49,7 +53,10 @@ class ProductionAdminDomain:
         domain = self.bench.config.admin.domain
         if not domain or normalize_host(domain) == normalize_host(self.existing_domain):
             return
-        DomainRouteProvider(self.bench).register(domain, domain)
+        policy = DomainRouteProvider(self.bench).register(domain, domain)
+        if policy:
+            self.bench.config.admin.route = policy
+            self.bench.config.admin.tls = policy.origin_tls
         self.registered_domain = domain
 
     def rollback(self) -> None:
@@ -81,7 +88,7 @@ class AdminDomainChange:
 
     def run(self, on_progress: Callable[[str], None] = lambda message: None) -> None:
         admin = self.bench.config.admin
-        restore = (admin.domain, admin.tls)
+        restore = (admin.domain, admin.tls, admin.route)
         self._validate()
 
         admin.domain = self.domain
@@ -94,24 +101,33 @@ class AdminDomainChange:
         try:
             self._persist()
             self._retarget_hostname_aliases()
-            # Publish the vhost before HTTP-01 certificate validation.
             self._republish_nginx()
             if self._reissue_certificate(on_progress):
                 self._republish_nginx()
             self._require_tls_if_requested()
+            self.repoint_pilot_endpoints()
         except BaseException:
             self._roll_back(restore, on_progress)
             raise
 
         self._route.release_previous()
+        self._clear_site_cache(on_progress)
         on_progress(f"\nAdmin is now at {self._served_scheme()}://{self.domain}")
 
+    def _clear_site_cache(self, on_progress: Callable[[str], None]) -> None:
+        """Drop cached site configs so sites read the new pilot_endpoint."""
+        try:
+            self.bench.clear_cache()
+        except (BenchError, OSError) as exc:
+            on_progress(f"Warning: could not clear the site cache: {exc}")
+
     def _served_scheme(self) -> str:
-        """Return the scheme nginx can currently serve."""
+        admin = self.bench.config.admin
+        if admin.route:
+            return admin.route.public_scheme
         from pilot.managers.nginx import NginxManager
 
-        serves_https = self.bench.config.admin.tls and NginxManager(self.bench).has_admin_cert
-        return "https" if serves_https else "http"
+        return "https" if admin.tls and NginxManager(self.bench).has_admin_cert else "http"
 
     def _validate(self) -> None:
         from pilot.internal.validators import validate_hostname
@@ -122,13 +138,45 @@ class AdminDomainChange:
             raise BenchError(error)
         if normalize_host(self.domain) == normalize_host(self.previous) and self.tls is None:
             raise BenchError(f"The admin domain is already '{self.domain}'.")
+        route = self.bench.config.admin.route
+        if (
+            route
+            and normalize_host(self.domain) == normalize_host(self.previous)
+            and self.tls is not None
+            and self.tls != route.origin_tls
+        ):
+            raise BenchError("The domain provider controls TLS for the admin domain.")
 
     def _persist(self) -> None:
         from pilot.config import BenchConfig
 
         admin = self.bench.config.admin
         with BenchConfig.open(self.bench.path, mode="raw") as data:
-            data.setdefault("admin", {}).update({"domain": admin.domain, "tls": admin.tls})
+            values = {"domain": admin.domain, "tls": admin.tls}
+            if admin.route:
+                values["route"] = admin.route.to_dict()
+            else:
+                data.setdefault("admin", {}).pop("route", None)
+            data.setdefault("admin", {}).update(values)
+
+    def repoint_pilot_endpoints(self) -> None:
+        """Point every existing `pilot_endpoint` in the bench's site configs at the admin URL."""
+        endpoint = self.bench.admin_endpoint
+        common_config_path = self.bench.sites_path / "common_site_config.json"
+        self._repoint_pilot_endpoint(common_config_path, endpoint, indent=2)
+        for config_path in sorted(self.bench.sites_path.glob("*/site_config.json")):
+            if not config_path.parent.is_symlink():
+                self._repoint_pilot_endpoint(config_path, endpoint, indent=1)
+
+    def _repoint_pilot_endpoint(self, config_path: Path, endpoint: str, indent: int) -> None:
+        if not config_path.is_file() or config_path.is_symlink():
+            return
+        with exclusive_file_lock(config_path):
+            config = json.loads(config_path.read_text())
+            if "pilot_endpoint" not in config or config["pilot_endpoint"] == endpoint:
+                return
+            config["pilot_endpoint"] = endpoint
+            replace_private_text_locked(config_path, json.dumps(config, indent=indent))
 
     def _retarget_hostname_aliases(self) -> None:
         self.bench.hostname_aliases.retarget("admin", self.previous, self.domain)
@@ -171,14 +219,20 @@ class AdminDomainChange:
             f"pass tls=false to move it to plain HTTP."
         )
 
-    def _roll_back(self, restore: tuple[str, bool], on_progress: Callable[[str], None]) -> None:
+    def _roll_back(
+        self,
+        restore: tuple[str, bool, "RoutePolicy | None"],
+        on_progress: Callable[[str], None],
+    ) -> None:
         """Undo committed config and routes after a failed switch."""
         admin = self.bench.config.admin
-        admin.domain, admin.tls = restore
+        admin.domain, admin.tls, admin.route = restore
         with contextlib.suppress(Exception):
             self._persist()
         with contextlib.suppress(Exception):
             self.bench.hostname_aliases.retarget("admin", self.domain, self.previous)
+        with contextlib.suppress(Exception):
+            self.repoint_pilot_endpoints()
         # Rollback must not hide the original failure or skip nginx recovery.
         with contextlib.suppress(Exception):
             self._route.rollback()
