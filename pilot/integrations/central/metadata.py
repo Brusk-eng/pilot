@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import urllib.request
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from pilot.integrations.central.client import CentralClientError
 
@@ -18,8 +18,16 @@ TOKEN_TTL_SECONDS = 21600
 REQUIRED_KEYS = ("central_endpoint", "central_auth_token", "jwks_url", "jwks_audience_id")
 S3_KEYS = ("access_key", "secret_key", "bucket", "provider", "region", "endpoint_url")
 TELEMETRY_KEYS = ("endpoint", "token")
+
+
+class MetadataBlock(TypedDict):
+    attribute: str
+    keys: tuple[str, ...]
+    url_key: str
+
+
 # The cloud caps each metadata value at 1 KiB, so each optional block has its own attribute.
-BLOCKS = {
+BLOCKS: dict[str, MetadataBlock] = {
     "s3": {"attribute": "pilot-storage", "keys": S3_KEYS, "url_key": "endpoint_url"},
     "telemetry": {"attribute": "pilot-telemetry", "keys": TELEMETRY_KEYS, "url_key": "endpoint"},
 }
