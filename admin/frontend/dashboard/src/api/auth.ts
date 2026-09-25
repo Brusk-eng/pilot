@@ -3,14 +3,14 @@ import type { AdminSession } from '@/types/auth'
 import type { Bootstrap } from '@/types/core'
 
 export const authApi = {
-  bootstrap: () => request.get('bootstrap').json<Bootstrap>(),
-  session: () => request.get('auth/session').json<AdminSession>(),
+  bootstrap: (): Promise<Bootstrap> => request.get('bootstrap').json(),
+  session: (): Promise<AdminSession> => request.get('auth/session').json(),
 
-  login: (password: string, otp?: string) =>
-    request.post('auth/session', { json: { password, otp } }).json<AdminSession>(),
+  login: (password: string, otp?: string): Promise<AdminSession> =>
+    request.post('auth/session', { json: { password, otp } }).json(),
 
-  loginWithSid: (sid: string) =>
-    request.post('auth/session', { json: { sid } }).json<AdminSession>(),
+  loginWithSid: (sid: string): Promise<AdminSession> =>
+    request.post('auth/session', { json: { sid } }).json(),
 
   logout: () => request.delete('auth/session'),
 }

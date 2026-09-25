@@ -2,15 +2,17 @@ import { request } from '@/api/client'
 import type { GitBranches, GitConnection, GitRepository, ResolvedApp } from '@/types/git'
 
 export const gitApi = {
-  status: () => request.get('git/connection').json<GitConnection>(),
-  connect: (provider: string, token: string, username: string) =>
-    request.put('git/connection', { json: { provider, token, username } }).json<GitConnection>(),
+  status: (): Promise<GitConnection> => request.get('git/connection').json(),
+
+  connect: (provider: string, token: string, username: string): Promise<GitConnection> =>
+    request.put('git/connection', { json: { provider, token, username } }).json(),
+
   disconnect: () => request.delete('git/connection'),
-  repos: () => request.get('git/repositories').json<GitRepository[]>(),
-  branches: (repo: string) =>
-    request.get('git/branches', { searchParams: { repo } }).json<GitBranches>(),
-  resolve: (repo: string, branch?: string) =>
-    request
-      .post('git/repository-resolutions', { json: { repo, branch: branch || '' } })
-      .json<ResolvedApp>(),
+  repos: (): Promise<GitRepository[]> => request.get('git/repositories').json(),
+
+  branches: (repo: string): Promise<GitBranches> =>
+    request.get('git/branches', { searchParams: { repo } }).json(),
+
+  resolve: (repo: string, branch?: string): Promise<ResolvedApp> =>
+    request.post('git/repository-resolutions', { json: { repo, branch: branch || '' } }).json(),
 }

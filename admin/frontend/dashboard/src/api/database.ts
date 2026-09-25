@@ -18,92 +18,90 @@ import type {
 import type { TaskPayload } from '@/types/tasks'
 
 export const databaseApi = {
-  sites: () => request.get('database/sites').json<DatabaseSite[]>(),
+  sites: (): Promise<DatabaseSite[]> => request.get('database/sites').json(),
 
-  schema: (site: string) =>
-    request.get('database/schema', { searchParams: { site } }).json<TableSchema[]>(),
+  schema: (site: string): Promise<TableSchema[]> =>
+    request.get('database/schema', { searchParams: { site } }).json(),
 
-  execute: (site: string, query: string, readOnly: boolean) =>
-    request
-      .post('database/queries', { json: { site, query, read_only: readOnly } })
-      .json<ExecutedQuery>(),
+  execute: (site: string, query: string, readOnly: boolean): Promise<ExecutedQuery> =>
+    request.post('database/queries', { json: { site, query, read_only: readOnly } }).json(),
 
-  diagnostics: () =>
-    request
-      .get('database/diagnostics')
-      .json<DatabaseDiagnostics | UnsupportedDatabaseDiagnostics>(),
+  diagnostics: (): Promise<DatabaseDiagnostics | UnsupportedDatabaseDiagnostics> =>
+    request.get('database/diagnostics').json(),
 
-  processList: (site = '') =>
-    request
-      .get('database/processlist', { searchParams: site ? { site } : {} })
-      .json<DatabaseProcess[]>(),
+  processList: (site = ''): Promise<DatabaseProcess[]> =>
+    request.get('database/processlist', { searchParams: site ? { site } : {} }).json(),
 
-  lockWaitRows: (site = '') =>
-    request.get('database/lockwaits', { searchParams: site ? { site } : {} }).json<LockWaitRow[]>(),
+  lockWaitRows: (site = ''): Promise<LockWaitRow[]> =>
+    request.get('database/lockwaits', { searchParams: site ? { site } : {} }).json(),
 
-  size: (site = '') =>
-    request.get('database/size', { searchParams: site ? { site } : {} }).json<DatabaseSize>(),
+  size: (site = ''): Promise<DatabaseSize> =>
+    request.get('database/size', { searchParams: site ? { site } : {} }).json(),
 
-  tableSizes: (site: string) =>
-    request.get('database/table-sizes', { searchParams: { site } }).json<TableSize[]>(),
+  tableSizes: (site: string): Promise<TableSize[]> =>
+    request.get('database/table-sizes', { searchParams: { site } }).json(),
 
-  performanceReport: (reportType: string, site = '', limit = 20, offset = 0) =>
+  performanceReport: (
+    reportType: string,
+    site = '',
+    limit = 20,
+    offset = 0,
+  ): Promise<PerformanceSection> =>
     request
       .get('database/performance-report', {
         searchParams: { report_type: reportType, site, limit, offset },
       })
-      .json<PerformanceSection>(),
+      .json(),
 
-  killProcess: (processId: number) =>
-    request
-      .post('database/processlist/kill', { json: { process_id: processId } })
-      .json<ActionStatus>(),
+  killProcess: (processId: number): Promise<ActionStatus> =>
+    request.post('database/processlist/kill', { json: { process_id: processId } }).json(),
 
   binlogs: {
-    list: () => request.get('database/binlogs').json<BinlogFile[]>(),
-    purge: (upTo: string) =>
-      request.post('database/binlogs/purge', { json: { up_to: upTo } }).json<ActionStatus>(),
+    list: (): Promise<BinlogFile[]> => request.get('database/binlogs').json(),
+    purge: (upTo: string): Promise<ActionStatus> =>
+      request.post('database/binlogs/purge', { json: { up_to: upTo } }).json(),
   },
 
   configurations: {
-    list: () => request.get('database/configurations').json<DatabaseConfigurationSnapshot>(),
-    set: (variable: string, value: unknown, idempotencyKey: string) =>
+    list: (): Promise<DatabaseConfigurationSnapshot> =>
+      request.get('database/configurations').json(),
+    set: (variable: string, value: unknown, idempotencyKey: string): Promise<TaskPayload> =>
       request
         .post(`database/configurations/${encodeURIComponent(variable)}`, {
           json: { value },
           headers: { 'Idempotency-Key': idempotencyKey },
         })
-        .json<TaskPayload>(),
+        .json(),
   },
 
   quickActions: {
-    capabilities: () => request.get('database/quick-actions').json<DatabaseCapabilities>(),
-    restart: (idempotencyKey: string) =>
+    capabilities: (): Promise<DatabaseCapabilities> => request.get('database/quick-actions').json(),
+    restart: (idempotencyKey: string): Promise<TaskPayload> =>
       request
         .post('database/quick-actions/restart', {
           headers: { 'Idempotency-Key': idempotencyKey },
         })
-        .json<TaskPayload>(),
-    setPerformanceSchema: (enabled: boolean, idempotencyKey: string) =>
+        .json(),
+    setPerformanceSchema: (enabled: boolean, idempotencyKey: string): Promise<TaskPayload> =>
       request
         .post('database/quick-actions/performance-schema', {
           json: { enabled },
           headers: { 'Idempotency-Key': idempotencyKey },
         })
-        .json<TaskPayload>(),
-    setInnoDBBufferPoolSize: (sizeMb: number, idempotencyKey: string) =>
+        .json(),
+    setInnoDBBufferPoolSize: (sizeMb: number, idempotencyKey: string): Promise<TaskPayload> =>
       request
         .post('database/quick-actions/innodb-buffer-pool-size', {
           json: { size_mb: sizeMb },
           headers: { 'Idempotency-Key': idempotencyKey },
         })
-        .json<TaskPayload>(),
-    setMaxConnections: (maxConnections: number, idempotencyKey: string) =>
+        .json(),
+    setMaxConnections: (maxConnections: number, idempotencyKey: string): Promise<TaskPayload> =>
       request
         .post('database/quick-actions/max-connections', {
           json: { max_connections: maxConnections },
           headers: { 'Idempotency-Key': idempotencyKey },
         })
-        .json<TaskPayload>(),
+        .json(),
   },
 }

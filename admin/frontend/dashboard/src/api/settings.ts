@@ -5,23 +5,23 @@ import type { CliDevUpdate, CliReleaseUpdate } from '@/types/updates'
 export type CliUpdate = CliDevUpdate | CliReleaseUpdate
 
 export const settingsApi = {
-  get: () => unwrap(request.get('settings').json<Settings>()),
+  get: (): Promise<Settings> => unwrap(request.get('settings').json()),
 
-  update: (data: Record<string, unknown>) =>
-    unwrap(request.patch('settings', { json: data }).json<SettingsUpdate>()),
+  update: (data: Record<string, unknown>): Promise<SettingsUpdate> =>
+    unwrap(request.patch('settings', { json: data }).json()),
 
-  changeAdminPassword: (data: Record<string, unknown>) =>
-    unwrap(request.post('auth/password', { json: data }).json<Record<string, never>>()),
+  changeAdminPassword: (data: Record<string, unknown>): Promise<Record<string, never>> =>
+    unwrap(request.post('auth/password', { json: data }).json()),
 
-  myIp: () => request.get('network/client').json<ClientAddress>(),
+  myIp: (): Promise<ClientAddress> => request.get('network/client').json(),
 
-  llmModels: (provider: string, apiKey = '', apiBase = '') =>
+  llmModels: (provider: string, apiKey = '', apiBase = ''): Promise<string[]> =>
     request
       .post('settings/llm/models', { json: { provider, api_key: apiKey, api_base: apiBase } })
-      .json<string[]>(),
+      .json(),
 }
 
 export const cliUpdatesApi = {
-  status: () => unwrap(request.get('cli-updates').json<CliUpdate>()),
-  check: () => unwrap(request.post('cli-update-checks').json<CliUpdate>()),
+  status: (): Promise<CliUpdate> => unwrap(request.get('cli-updates').json()),
+  check: (): Promise<CliUpdate> => unwrap(request.post('cli-update-checks').json()),
 }

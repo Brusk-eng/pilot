@@ -2,18 +2,18 @@ import { apiUrl, request } from '@/api/client'
 import type { TaskPayload, TaskWorker } from '@/types/tasks'
 
 export const tasksApi = {
-  list: (status?: string) =>
-    request
-      .get('tasks', status && status !== 'all' ? { searchParams: { status } } : {})
-      .json<TaskPayload[]>(),
+  list: (status?: string): Promise<TaskPayload[]> =>
+    request.get('tasks', status && status !== 'all' ? { searchParams: { status } } : {}).json(),
 
-  detail: (taskId: string) => request.get(`tasks/${taskId}`).json<TaskPayload>(),
+  detail: (taskId: string): Promise<TaskPayload> => request.get(`tasks/${taskId}`).json(),
 
-  run: (command: string, args: Record<string, unknown> = {}) =>
-    request.post('tasks', { json: { command, ...args } }).json<TaskPayload>(),
+  run: (command: string, args: Record<string, unknown> = {}): Promise<TaskPayload> =>
+    request.post('tasks', { json: { command, ...args } }).json(),
 
   cancel: (taskId: string) => request.delete(`tasks/${taskId}`),
-  retry: (taskId: string) => request.post(`tasks/${taskId}/actions/retry`).json<TaskPayload>(),
+
+  retry: (taskId: string): Promise<TaskPayload> =>
+    request.post(`tasks/${taskId}/actions/retry`).json(),
 
   output: async (taskId: string) => {
     const response = await request.get(`tasks/${taskId}/output/content`)
@@ -28,7 +28,7 @@ export const tasksApi = {
 }
 
 export const taskWorkerApi = {
-  detail: () => request.get('task-worker').json<TaskWorker>(),
-  start: () => request.post('task-worker/actions/start').json<TaskWorker>(),
-  stop: () => request.post('task-worker/actions/stop').json<TaskWorker>(),
+  detail: (): Promise<TaskWorker> => request.get('task-worker').json(),
+  start: (): Promise<TaskWorker> => request.post('task-worker/actions/start').json(),
+  stop: (): Promise<TaskWorker> => request.post('task-worker/actions/stop').json(),
 }

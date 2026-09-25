@@ -5,24 +5,23 @@ import { ACTIVE_STATES, ATTENTION_STATES } from '@/utils/updateFormat.ts'
 type Operation = MigrationSummary | null | undefined
 
 export const updatesApi = {
-  list: (params: Record<string, string | number> = {}) =>
-    request.get('migrations', { searchParams: params }).json<MigrationPage>(),
+  list: (params: Record<string, string | number> = {}): Promise<MigrationPage> =>
+    request.get('migrations', { searchParams: params }).json(),
 
-  current: () => request.get('migrations/current').json<MigrationSummary | null>(),
-  detail: (id: string) => request.get(`migrations/${id}`).json<MigrationSummary>(),
+  current: (): Promise<MigrationSummary | null> => request.get('migrations/current').json(),
+  detail: (id: string): Promise<MigrationSummary> => request.get(`migrations/${id}`).json(),
 
-  createUpdate: (json: Record<string, unknown> = {}) =>
-    request.post('updates', { json }).json<MigrationAccepted>(),
+  createUpdate: (json: Record<string, unknown> = {}): Promise<MigrationAccepted> =>
+    request.post('updates', { json }).json(),
 
-  retry: (id: string) => request.post(`migrations/${id}/actions/retry`).json<MigrationAccepted>(),
+  retry: (id: string): Promise<MigrationAccepted> =>
+    request.post(`migrations/${id}/actions/retry`).json(),
 
-  restore: (id: string) =>
-    request.post(`migrations/${id}/actions/restore`).json<MigrationAccepted>(),
+  restore: (id: string): Promise<MigrationAccepted> =>
+    request.post(`migrations/${id}/actions/restore`).json(),
 
-  bypassPatch: (id: string, patch: string) =>
-    request
-      .post(`migrations/${id}/actions/bypass-patch`, { json: { patch } })
-      .json<MigrationAccepted>(),
+  bypassPatch: (id: string, patch: string): Promise<MigrationAccepted> =>
+    request.post(`migrations/${id}/actions/bypass-patch`, { json: { patch } }).json(),
 }
 
 export const isResolved = (operation: Operation) => {

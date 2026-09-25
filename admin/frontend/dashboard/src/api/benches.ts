@@ -3,24 +3,24 @@ import type { BenchReadiness, BenchResource, CreatedBench } from '@/types/benche
 import type { WildcardDomains } from '@/types/sites'
 
 export const benchesApi = {
-  list: () => request.get('benches').json<BenchResource[]>(),
+  list: (): Promise<BenchResource[]> => request.get('benches').json(),
 
-  start: (name: string) =>
-    request.post(`benches/${encodeURIComponent(name)}/actions/start`).json<BenchResource>(),
+  start: (name: string): Promise<BenchResource> =>
+    request.post(`benches/${encodeURIComponent(name)}/actions/start`).json(),
 
-  stop: (name: string) =>
-    request.post(`benches/${encodeURIComponent(name)}/actions/stop`).json<BenchResource>(),
+  stop: (name: string): Promise<BenchResource> =>
+    request.post(`benches/${encodeURIComponent(name)}/actions/stop`).json(),
 
-  restart: (name: string) =>
-    request.post(`benches/${encodeURIComponent(name)}/actions/restart`).json<BenchResource>(),
+  restart: (name: string): Promise<BenchResource> =>
+    request.post(`benches/${encodeURIComponent(name)}/actions/restart`).json(),
 
   drop: (name: string) => request.delete(`benches/${encodeURIComponent(name)}`),
 
-  create: (payload: Record<string, unknown>) =>
-    request.post('benches', { json: payload }).json<CreatedBench>(),
+  create: (payload: Record<string, unknown>): Promise<CreatedBench> =>
+    request.post('benches', { json: payload }).json(),
 
-  wildcardDomains: () => request.get('benches/domain-options').json<WildcardDomains>(),
+  wildcardDomains: (): Promise<WildcardDomains> => request.get('benches/domain-options').json(),
 
-  ready: (payload: Record<string, unknown>) =>
-    request.post('bench-readiness-checks', { json: payload }).json<BenchReadiness>(),
+  ready: (payload: Record<string, unknown>): Promise<BenchReadiness> =>
+    request.post('bench-readiness-checks', { json: payload }).json(),
 }

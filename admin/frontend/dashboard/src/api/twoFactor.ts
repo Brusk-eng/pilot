@@ -1,22 +1,20 @@
 import { request, unwrap } from '@/api/client'
 import type { RecoveryCodes, TwoFactorEnrollment, TwoFactorStatus } from '@/types/auth'
 
-// The device name is the key, so it has to be encoded for the URL path.
 const path = (name: string) => `auth/two-factor/${encodeURIComponent(name)}`
 
 export const twoFactorApi = {
-  status: () => unwrap(request.get('auth/two-factor').json<TwoFactorStatus>()),
+  status: (): Promise<TwoFactorStatus> => unwrap(request.get('auth/two-factor').json()),
 
-  startEnrollment: (name: string) =>
-    unwrap(
-      request.post('auth/two-factor/enrollment', { json: { name } }).json<TwoFactorEnrollment>(),
-    ),
+  startEnrollment: (name: string): Promise<TwoFactorEnrollment> =>
+    unwrap(request.post('auth/two-factor/enrollment', { json: { name } }).json()),
 
-  confirm: (name: string, otp: string) =>
-    unwrap(request.post(path(name), { json: { otp } }).json<TwoFactorStatus>()),
+  confirm: (name: string, otp: string): Promise<TwoFactorStatus> =>
+    unwrap(request.post(path(name), { json: { otp } }).json()),
 
-  removeDevice: (name: string) => unwrap(request.delete(path(name)).json<TwoFactorStatus>()),
+  removeDevice: (name: string): Promise<TwoFactorStatus> =>
+    unwrap(request.delete(path(name)).json()),
 
-  regenerateRecoveryCodes: () =>
-    unwrap(request.post('auth/two-factor/recovery-codes').json<RecoveryCodes>()),
+  regenerateRecoveryCodes: (): Promise<RecoveryCodes> =>
+    unwrap(request.post('auth/two-factor/recovery-codes').json()),
 }

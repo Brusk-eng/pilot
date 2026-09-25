@@ -9,15 +9,18 @@ import type {
 import type { StorageBreakdown } from '@/types/storage'
 
 export const monitorApi = {
-  stats: () => request.get('metrics').json<SystemMetrics>(),
+  stats: (): Promise<SystemMetrics> => request.get('metrics').json(),
 
-  history: (window: string) =>
-    request.get('monitor/history', { searchParams: { window } }).json<SystemHistory>(),
+  history: (window: string): Promise<SystemHistory> =>
+    request.get('monitor/history', { searchParams: { window } }).json(),
 
-  dbHistory: (window: string) =>
-    request.get('database/history', { searchParams: { window } }).json<DatabaseHistory>(),
+  dbHistory: (window: string): Promise<DatabaseHistory> =>
+    request.get('database/history', { searchParams: { window } }).json(),
 
-  systemInfo: () => request.get('system').json<SystemInfo>(),
-  waf: (window: string) => request.get('waf', { searchParams: { window } }).json<WafAnalytics>(),
-  storage: () => request.get('storage').json<StorageBreakdown>(),
+  systemInfo: (): Promise<SystemInfo> => request.get('system').json(),
+
+  waf: (window: string): Promise<WafAnalytics> =>
+    request.get('waf', { searchParams: { window } }).json(),
+
+  storage: (): Promise<StorageBreakdown> => request.get('storage').json(),
 }

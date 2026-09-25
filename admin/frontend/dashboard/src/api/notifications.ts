@@ -11,8 +11,8 @@ const mutate = async (pending: Promise<Response>) => {
 }
 
 export const notificationsApi = {
-  list: (params: Record<string, string | number>) =>
-    unwrap(request.get('notifications', { searchParams: params }).json<NotificationPage>()),
+  list: (params: Record<string, string | number>): Promise<NotificationPage> =>
+    unwrap(request.get('notifications', { searchParams: params }).json()),
 
   markRead: (name: string) =>
     mutate(request.post(`notifications/${encodeURIComponent(name)}/read`)),

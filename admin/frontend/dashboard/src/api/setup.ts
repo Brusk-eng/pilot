@@ -6,22 +6,22 @@ import type { TaskPayload } from '@/types/tasks'
 const setupIdempotencyKey = 'wizard-setup'
 
 export const setupApi = {
-  bootstrap: () => request.get('bootstrap').json<Bootstrap>(),
-  config: () => request.get('setup/configuration').json<SetupConfiguration>(),
-  branches: () => request.get('setup/framework-branches').json<FrameworkBranches>(),
+  bootstrap: (): Promise<Bootstrap> => request.get('bootstrap').json(),
+  config: (): Promise<SetupConfiguration> => request.get('setup/configuration').json(),
+  branches: (): Promise<FrameworkBranches> => request.get('setup/framework-branches').json(),
 
-  validateDatabase: (json: Record<string, unknown>) =>
-    request.post('setup/database-validations', { json }).json<DatabaseValidation>(),
+  validateDatabase: (json: Record<string, unknown>): Promise<DatabaseValidation> =>
+    request.post('setup/database-validations', { json }).json(),
 
-  save: (json: Record<string, unknown>) =>
-    request.put('setup/configuration', { json }).json<SetupConfiguration>(),
+  save: (json: Record<string, unknown>): Promise<SetupConfiguration> =>
+    request.put('setup/configuration', { json }).json(),
 
-  start: () =>
+  start: (): Promise<TaskPayload> =>
     request
       .post('setup/actions/start', {
         headers: { 'Idempotency-Key': setupIdempotencyKey },
       })
-      .json<TaskPayload>(),
+      .json(),
 
   finish: (taskId: string) => request.post('setup/actions/finish', { json: { task_id: taskId } }),
   streamUrl: (taskId: string) => apiUrl(`tasks/${taskId}/events`),
