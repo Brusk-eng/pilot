@@ -19,10 +19,10 @@ REQUIRED_KEYS = ("central_endpoint", "central_auth_token", "jwks_url", "jwks_aud
 S3_KEYS = ("access_key", "secret_key", "bucket", "provider", "region", "endpoint_url")
 TELEMETRY_KEYS = ("endpoint", "token")
 # The cloud caps each metadata value at 1 KiB, so each optional block has its own attribute.
-BLOCKS = (
-    ("s3", "pilot-storage", S3_KEYS, "endpoint_url"),
-    ("telemetry", "pilot-telemetry", TELEMETRY_KEYS, "endpoint"),
-)
+BLOCKS = {
+    "s3": {"attribute": "pilot-storage", "keys": S3_KEYS, "url_key": "endpoint_url"},
+    "telemetry": {"attribute": "pilot-telemetry", "keys": TELEMETRY_KEYS, "url_key": "endpoint"},
+}
 
 
 def attribute_name() -> str:
@@ -91,9 +91,9 @@ class InstanceMetadata:
             return None
 
         credentials = _parse_credentials(raw, name)
-        for block, attribute, keys, url_key in BLOCKS:
-            if value := self.get_attribute(attribute):
-                credentials[block] = _parse_block(value, attribute, keys, url_key)
+        for block, spec in BLOCKS.items():
+            if value := self.get_attribute(spec["attribute"]):
+                credentials[block] = _parse_block(value, spec["attribute"], spec["keys"], spec["url_key"])
         return credentials
 
     def get_attribute(self, name: str) -> str | None:
