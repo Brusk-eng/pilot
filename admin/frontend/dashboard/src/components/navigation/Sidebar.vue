@@ -69,7 +69,7 @@ const isActive = (to: string) => route.path === to || route.path.startsWith(`${t
           v-for="item in section.items"
           :key="item.to"
           :icon="item.icon"
-          :to="item.to"
+          :route="item.to"
           :active="isActive(item.to)"
           class="mb-0.5 text-sm"
         >
