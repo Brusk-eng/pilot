@@ -37,8 +37,8 @@ const statusFilter = ref('all')
 const view = ref('grid')
 
 const viewOptions = [
-  { value: 'grid', icon: 'lucide-layout-grid' },
-  { value: 'list', icon: 'lucide-list' },
+  { value: 'grid', label: 'Grid view', icon: 'lucide-layout-grid' },
+  { value: 'list', label: 'List view', icon: 'lucide-list' },
 ]
 
 const SITE_STATUS = {

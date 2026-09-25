@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Badge, Button, ErrorMessage, Select, TabButtons, Tooltip } from 'frappe-ui'
+import type { SelectOptionValue } from 'frappe-ui'
 import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -104,9 +105,9 @@ const setFilterQuery = (patch: Record<string, string>) => {
   router.replace({ name: 'Tasks', query })
 }
 
-const onSiteChange = (site: string | number | undefined) =>
+const onSiteChange = (site: SelectOptionValue | null | undefined) =>
   setFilterQuery({ site: String(site ?? '') })
-const onTypeChange = (type: string | number | undefined) =>
+const onTypeChange = (type: SelectOptionValue | null | undefined) =>
   setFilterQuery({ type: String(type ?? '') })
 
 // An empty list means something different when a filter is on - saying "no tasks

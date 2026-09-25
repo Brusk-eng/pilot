@@ -62,9 +62,8 @@ const xAxis = computed<ChartXAxisOptions>(() => ({
 const areaSeries = (color: string): SeriesStyle => ({
   color,
   smooth: true,
-  lineWidth: 1.5,
   showDataPoints: false,
-  fillOpacity: 0.2,
+  echartOptions: { lineStyle: { width: 1.5 }, areaStyle: { opacity: 0.2 } },
 })
 
 const bytesAxis = {

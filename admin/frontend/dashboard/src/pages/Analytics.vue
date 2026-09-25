@@ -407,9 +407,8 @@ const { tokens } = useChartTokens(ref())
 const lineSeries = (slot: number): SeriesStyle => ({
   color: tokens.value.categorical[slot - 1],
   smooth: true,
-  lineWidth: 1.5,
   showDataPoints: false,
-  fillOpacity: 0.25,
+  echartOptions: { lineStyle: { width: 1.5 }, areaStyle: { opacity: 0.25 } },
 })
 
 const styleFor = (names: string[], colorAt: (name: string, index: number) => number) =>
