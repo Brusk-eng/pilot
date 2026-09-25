@@ -34,7 +34,7 @@ def _staged(value: str | None):
     """The raw attribute, so the real parsing still runs."""
     return patch(
         "pilot.integrations.central.metadata.InstanceMetadata.get_attribute",
-        return_value=value,
+        side_effect=lambda name: value if name == "pilot-central" else None,
     )
 
 
