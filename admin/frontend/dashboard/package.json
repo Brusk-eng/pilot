@@ -6,7 +6,7 @@
   "scripts": {
     "preinstall": "cd \"$(git rev-parse --show-toplevel)\" && uv run python scripts/generate_ts_types.py",
     "dev": "vite",
-    "build": "vite build",
+    "build": "vue-tsc --noEmit && vite build",
     "test": "node --test src/utils/*.test.ts",
     "typecheck": "vue-tsc --noEmit",
     "preview": "vite preview"
