@@ -115,6 +115,7 @@ class Workspace:
         self.ensure_matches(db_type, frappe_branch)
         if not self.bench.python.exists():
             self.bench.initialize(on_progress)
+        self.restore_app(on_progress)
         if self.site.exists:
             self.sync(on_progress)
         else:
@@ -157,6 +158,17 @@ class Workspace:
                     f"Bench '{bench.config.name}' uses {label} '{current[label]}', not '{value}'. "
                     "Run 'pilot dev drop' first to start over."
                 )
+
+    def restore_app(self, on_progress: Callable[[str], None]) -> None:
+        """Link and register the app again when `pilot remove-app` took it out of the bench."""
+        from pilot.core.app import App
+
+        bench = self.bench
+        app = App(bench.config.get_app_by_name(self.app_name), bench)
+        if app.path.is_symlink() and bench.is_app_installed(self.app_name):
+            return
+        on_progress(f"Linking {self.app_name} from {self.root}...")
+        app.install_linked()
 
     def create_site(self, on_progress: Callable[[str], None]) -> "Site":
         from pilot.core.site import Site

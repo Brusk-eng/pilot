@@ -51,4 +51,4 @@ cd ../gameplan-search && pilot dev setup && pilot dev start
 
 See [Dev Commands](commands.md#dev-commands) for `pilot dev info`, `pilot dev drop`, and how other bench commands find this bench.
 
-Pilot never pulls, switches branches, or checks out commits in a linked app. `pilot update` skips it, and `pilot remove-app` only removes the symlink in `apps/`.
+Pilot never pulls, switches branches, or checks out commits in a linked app. `pilot update` skips it, and `pilot remove-app` only removes the symlink in `apps/`. The next `pilot dev setup` links and installs the app again.

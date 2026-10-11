@@ -223,6 +223,12 @@ class App:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.symlink_to(source, target_is_directory=True)
 
+    def install_linked(self) -> None:
+        """Link the checkout into apps/, install it into the environment, and register it."""
+        self.link()
+        self._install_into_environment()
+        self._register()
+
     def ensure_not_linked(self) -> None:
         """Refuse git work in, and moves of, a checkout symlinked into apps/, even
         when this App was made without its bench.toml entry."""
