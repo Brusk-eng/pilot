@@ -209,6 +209,28 @@ class App:
         return None
 
     @property
+    def is_linked(self) -> bool:
+        """A local checkout symlinked into apps/. Its git state belongs to the developer."""
+        return self.config.is_linked or self.path.is_symlink()
+
+    def link(self) -> None:
+        """Symlink the local checkout at config.path into apps/."""
+        source = Path(self.config.path).resolve()
+        if self.path.is_symlink() and self.path.resolve() == source:
+            return
+        if self.path.exists() or self.path.is_symlink():
+            raise BenchError(f"'{self.path}' already exists - remove it before linking {source}.")
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.symlink_to(source, target_is_directory=True)
+
+    def ensure_not_linked(self) -> None:
+        if self.is_linked:
+            raise BenchError(
+                f"'{self.config.name}' is linked to {self.path.resolve()}. "
+                "Pull, switch branches, or check out commits in that checkout yourself."
+            )
+
+    @property
     def is_cloned(self) -> bool:
         if (self.path / ".git").exists():
             return True
@@ -238,13 +260,16 @@ class App:
         self._repository.clone()
 
     def update(self, pin: RevisionPin | None = None) -> None:
+        self.ensure_not_linked()
         self._repository.update(pin)
 
     def switch_branch(self, branch: str) -> None:
+        self.ensure_not_linked()
         self._repository.switch_branch(branch)
 
     def checkout_commit(self, sha: str) -> None:
         """Check out a specific commit SHA, refetching it from origin if needed."""
+        self.ensure_not_linked()
         self._repository.checkout_pinned_commit(sha)
 
     def return_to(self, branch: str, sha: str) -> None:

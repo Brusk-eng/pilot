@@ -61,6 +61,15 @@ branch = "version-15"
 branches = ["version-15", "develop"]
 ```
 
+A linked app uses `path` instead of `repo` and `branch`. Pilot symlinks that checkout into `apps/` and never pulls,
+switches, or checks out commits in it. `pilot dev setup` writes this entry:
+
+```toml
+[[apps]]
+name = "gameplan"
+path = "/home/me/Projects/gameplan"
+```
+
 `[redis]` defines separate cache and queue ports. `[[workers]]` defines queue groups and their process counts.
 
 ## Runtime modes

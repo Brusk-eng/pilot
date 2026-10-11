@@ -204,6 +204,7 @@ class BenchConfig:
                 repo=a.get("repo", ""),
                 branch=a.get("branch", ""),
                 branches=a.get("branches", []),
+                path=a.get("path", ""),
             )
             for a in data.get("apps", [])
         ]
@@ -283,6 +284,10 @@ class BenchConfig:
         if not self.python_version:
             raise ConfigError("bench.python is required and must not be empty.")
         for app in self.apps:
+            if app.is_linked:
+                if not app.name:
+                    raise ConfigError(f"Linked app at '{app.path}' must have a name.")
+                continue
             if not app.name or not app.repo or not app.branch:
                 raise ConfigError(f"App '{app.name or '(unnamed)'}' must have name, repo, and branch.")
             if app.branches and app.branch not in app.branches:
@@ -543,6 +548,9 @@ class BenchConfig:
     def _apps_section(self) -> list[ConfigDict]:
         apps: list[ConfigDict] = []
         for app in self.apps:
+            if app.is_linked:
+                apps.append({"name": app.name, "path": app.path})
+                continue
             app_data: ConfigDict = {"name": app.name, "repo": app.repo, "branch": app.branch}
             if app.branches:
                 app_data["branches"] = app.branches

@@ -78,7 +78,8 @@ class PythonAssetBuilder:
         if app.config.name == "frappe" and (app.path / "package.json").exists():
             self.ensure_yarn_install(app.path)
 
-        if not force and not app.has_source_changes:
+        # A linked checkout is built from its own source, never from a release.
+        if not force and not app.is_linked and not app.has_source_changes:
             from pilot.core.app.prebuilt_assets import PrebuiltAssets
 
             prebuilt = PrebuiltAssets(app)
@@ -109,6 +110,7 @@ class PythonAssetBuilder:
                 self.run_compiler(
                     [get_yarn_bin(), "build"],
                     cwd=app.path / frontend_dir,
+                    env=self.manager._build_env(),
                     stream_output=True,
                 )
 
