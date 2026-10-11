@@ -80,6 +80,8 @@ def test_setup_creates_a_linked_bench_and_reruns_only_sync_it(tmp_path: Path, be
         patch.object(Bench, "initialize") as initialize,
         patch.object(Site, "provision", side_effect=fake_provision) as provision,
         patch.object(Bench, "install_requirements") as install_requirements,
+        patch.object(Site, "installed_apps", return_value=["frappe", "gameplan"]),
+        patch.object(Site, "install_app") as install_app,
         patch.object(Site, "migrate") as migrate,
         patch.object(RedisManager, "running") as redis_running,
     ):
@@ -101,11 +103,47 @@ def test_setup_creates_a_linked_bench_and_reruns_only_sync_it(tmp_path: Path, be
     initialize.assert_called_once()
     provision.assert_called_once()
     install_requirements.assert_called_once()
+    install_app.assert_not_called()
     migrate.assert_called_once()
     redis_running.assert_called_once()
 
     with pytest.raises(BenchError, match="uses database 'sqlite', not 'postgres'"):
         workspace.setup(db_type="postgres")
+
+
+def test_setup_resumes_a_site_left_without_the_app(tmp_path: Path, benches: Path) -> None:
+    repo = make_repo(tmp_path / "gameplan")
+
+    def provision_without_app(bench: Bench, name: str, *args, **kwargs) -> Site:
+        fake_provision(bench, name, *args, **kwargs)
+        raise BenchError("install-app failed")
+
+    with (
+        patch.object(Bench, "initialize"),
+        patch.object(Site, "provision", side_effect=provision_without_app),
+        pytest.raises(BenchError, match="install-app failed"),
+    ):
+        Workspace(repo).setup()
+
+    workspace = Workspace(repo)
+    bench = workspace.bench
+    assert bench.config.get_app_by_name("gameplan").is_linked
+    assert not bench.config.admin.enabled
+    App(bench.config.get_app_by_name("gameplan"), bench).link()
+    (bench.env_path / "bin").mkdir(parents=True)
+    bench.python.touch()
+
+    with (
+        patch.object(Bench, "install_requirements"),
+        patch.object(Site, "installed_apps", return_value=["frappe"]),
+        patch.object(Site, "install_app") as install_app,
+        patch.object(Site, "migrate") as migrate,
+        patch.object(RedisManager, "running"),
+    ):
+        workspace.setup()
+
+    assert install_app.call_args.args[0].config.name == "gameplan"
+    migrate.assert_called_once()
 
 
 def test_a_second_checkout_gets_its_own_bench(tmp_path: Path, benches: Path) -> None:

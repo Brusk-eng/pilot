@@ -10,7 +10,7 @@ from pilot.config import BenchConfig
 from pilot.exceptions import BenchError
 
 if TYPE_CHECKING:
-    from pilot.config import S3Config, SiteConfig
+    from pilot.config import AppConfig, S3Config, SiteConfig
     from pilot.core.app import App, NewAppOptions, RevisionPin
     from pilot.core.bench.hostname_aliases import HostnameAliases
     from pilot.core.bench.migration.store import MigrationStore
@@ -62,8 +62,12 @@ class Bench:
         admin_tls: bool | None = None,
         db_type: str = "mariadb",
         admin_password: str = "",
+        settings: dict | None = None,
+        apps: list["AppConfig"] | None = None,
         on_progress: Callable[[str], None] = lambda message: None,
     ) -> "Bench":
+        """Create the bench directory and bench.toml. `settings` takes flat keys that
+        override the defaults, and `apps` follow the framework app."""
         from pilot.core.bench.creator import BenchCreator
 
         return BenchCreator(
@@ -74,6 +78,8 @@ class Bench:
             admin_tls=admin_tls,
             db_type=db_type,
             admin_password=admin_password,
+            settings=settings,
+            apps=apps,
         ).run(on_progress)
 
     @property

@@ -116,19 +116,18 @@ class Workspace:
         return self.site
 
     def create_bench(self, db_type: str, frappe_branch: str, on_progress: Callable[[str], None]) -> "Bench":
-        from pilot.config import AppConfig, BenchConfig
+        from pilot.config import AppConfig
         from pilot.core.bench import Bench
 
         name = self.new_bench_name()
         on_progress(f"Creating bench '{name}' ({db_type}, frappe {frappe_branch}) for {self.root}")
-        path = benches_dir() / name
-        Bench.create_at(path, name, db_type=db_type)
-        with BenchConfig.open(path) as config:
-            config.admin.enabled = False
-            config.allow_developer_mode = True
-            config.framework_app.branch = frappe_branch
-            config.apps.append(AppConfig(name=self.app_name, repo="", branch="", path=str(self.root)))
-        return Bench(path)
+        return Bench.create_at(
+            benches_dir() / name,
+            name,
+            db_type=db_type,
+            settings={"admin_enabled": False, "allow_developer_mode": True, "app_branch": frappe_branch},
+            apps=[AppConfig(name=self.app_name, repo="", branch="", path=str(self.root))],
+        )
 
     def new_bench_name(self) -> str:
         slug = re.sub(r"[^a-z0-9]+", "-", self.root.name.lower()).strip("-") or "app"
@@ -169,13 +168,18 @@ class Workspace:
             config["default_site"] = self.site.config.name
 
     def sync(self, on_progress: Callable[[str], None]) -> None:
-        """Catch up with a pulled repository: new requirements and schema changes."""
+        """Catch up with a pulled repository: new requirements and schema changes.
+        Also installs the app if an interrupted setup left the site without it."""
         from pilot.managers.redis import RedisManager
 
+        site = self.site
         self.bench.install_requirements(on_progress)
-        on_progress(f"Migrating {self.site.config.name}...")
         with RedisManager(self.bench.config.redis, self.bench).running():
-            self.site.migrate()
+            if self.app_name not in site.installed_apps():
+                on_progress(f"Installing {self.app_name} on {site.config.name}...")
+                site.install_app(self.bench.app(self.app_name))
+            on_progress(f"Migrating {site.config.name}...")
+            site.migrate()
 
     def start(self, on_progress: Callable[[str], None] = lambda message: None) -> None:
         """Run the bench in the foreground until interrupted."""
