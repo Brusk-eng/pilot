@@ -21,10 +21,11 @@ class MigrationStore:
         self.root = bench.path / "migrations"
 
     def create_update(self, apps_filter: set[str] | None = None) -> MigrationOperation:
+        """Linked checkouts get no saved revision: Pilot never moves their code, so a revert leaves them alone."""
         selected = [
             app for app in self.bench.apps() if apps_filter is None or app.config.name in apps_filter
         ]
-        apps = [self._revision(app) for app in selected]
+        apps = [self._revision(app) for app in selected if not app.is_linked]
         sites = self.sites_for_apps({app.config.name for app in selected})
         return self._create(
             "update",

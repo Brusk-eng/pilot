@@ -11,6 +11,7 @@ import pytest
 
 from pilot.config import AppConfig, BenchConfig
 from pilot.core.app import App
+from pilot.core.app.repository import AppRepository
 from pilot.core.bench import Bench
 from pilot.core.site import Site
 from pilot.core.workspace import Workspace
@@ -236,6 +237,18 @@ def test_linked_app_is_a_symlink_whose_git_state_pilot_never_touches(tmp_path: P
     assert not bench.app("helpdesk").is_linked
     with pytest.raises(BenchError, match="is linked to"):
         bench.app("gameplan").update()
+
+
+def test_an_update_saves_no_revision_for_a_linked_app_so_a_revert_skips_it(tmp_path: Path) -> None:
+    bench = make_linked_bench(tmp_path / "bench", make_repo(tmp_path / "src" / "gameplan"))
+    make_repo(bench.apps_path / "helpdesk", name="helpdesk")
+
+    with patch.object(AppRepository, "update_target", return_value=None) as update_target:
+        operation = bench.migrations.create_update()
+
+    assert [revision.name for revision in operation.apps] == ["helpdesk"]
+    assert bench.app("gameplan").update_target() is None
+    update_target.assert_called_once()
 
 
 def test_removing_a_linked_app_unlinks_it_and_keeps_the_checkout(tmp_path: Path) -> None:

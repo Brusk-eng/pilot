@@ -188,7 +188,8 @@ class App:
         return self._repository.has_marketplace_update()
 
     def update_target(self) -> RevisionPin | None:
-        return self._repository.update_target()
+        """None for a linked checkout, which Pilot never updates."""
+        return None if self.is_linked else self._repository.update_target()
 
     @property
     def marketplace_entry(self) -> dict | None:
