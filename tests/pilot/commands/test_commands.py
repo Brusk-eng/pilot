@@ -188,7 +188,7 @@ def test_new_command_second_postgres_bench_inherits_password(
     from pilot.commands.bench.create import NewCommand
 
     monkeypatch.setattr("builtins.input", lambda _: "")
-    monkeypatch.setattr("pilot.utils._port_is_live", lambda port: False)
+    monkeypatch.setattr("pilot.utils.is_port_listening", lambda port: False)
     benches_dir = tmp_path / "benches"
     NewCommand(target_directory=benches_dir / "pg1", bench_name="pg1", database="postgres").run()
     _ensure_database_credentials(benches_dir / "pg1")
@@ -210,7 +210,7 @@ def test_new_command_postgres_port_is_not_offset_between_benches(
 
     monkeypatch.setattr("builtins.input", lambda _: "")
     monkeypatch.setattr(BenchCreator, "_port_is_live", staticmethod(lambda port: False))
-    monkeypatch.setattr("pilot.utils._port_is_live", lambda port: False)
+    monkeypatch.setattr("pilot.utils.is_port_listening", lambda port: False)
     benches_dir = tmp_path / "benches"
     NewCommand(target_directory=benches_dir / "first", bench_name="first", database="postgres").run()
     _ensure_database_credentials(benches_dir / "first")
@@ -231,7 +231,7 @@ def test_new_command_postgres_port_ignores_live_scan_on_macos(
     monkeypatch.setattr("builtins.input", lambda _: "")
     default_port = PostgresConfig().port
     # The default port reads as live, which would normally push the picker up.
-    monkeypatch.setattr("pilot.utils._port_is_live", lambda port: port == default_port)
+    monkeypatch.setattr("pilot.utils.is_port_listening", lambda port: port == default_port)
     target = tmp_path / "benches" / "pg"
     with patch("pilot.managers.platform.is_macos", return_value=True):
         NewCommand(target_directory=target, bench_name="pg", database="postgres").run()
@@ -263,7 +263,7 @@ def test_new_command_mariadb_port_is_not_offset_between_benches(
 
     monkeypatch.setattr("builtins.input", lambda _: "")
     monkeypatch.setattr(BenchCreator, "_port_is_live", staticmethod(lambda port: False))
-    monkeypatch.setattr("pilot.utils._port_is_live", lambda port: False)
+    monkeypatch.setattr("pilot.utils.is_port_listening", lambda port: False)
     benches_dir = tmp_path / "benches"
     NewCommand(target_directory=benches_dir / "first", bench_name="first").run()
     _ensure_database_credentials(benches_dir / "first")
@@ -284,7 +284,7 @@ def test_new_command_mariadb_port_ignores_live_scan_on_macos(
     monkeypatch.setattr("builtins.input", lambda _: "")
     default_port = MariaDBConfig().port
     # The default port reads as live, which would normally push the picker up.
-    monkeypatch.setattr("pilot.utils._port_is_live", lambda port: port == default_port)
+    monkeypatch.setattr("pilot.utils.is_port_listening", lambda port: port == default_port)
     target = tmp_path / "benches" / "m"
     with patch("pilot.managers.platform.is_macos", return_value=True):
         NewCommand(target_directory=target, bench_name="m").run()
@@ -300,7 +300,7 @@ def test_new_command_second_mariadb_bench_inherits_password(
     from pilot.commands.bench.create import NewCommand
 
     monkeypatch.setattr("builtins.input", lambda _: "")
-    monkeypatch.setattr("pilot.utils._port_is_live", lambda port: False)
+    monkeypatch.setattr("pilot.utils.is_port_listening", lambda port: False)
     benches_dir = tmp_path / "benches"
     NewCommand(target_directory=benches_dir / "m1", bench_name="m1").run()
     _ensure_database_credentials(benches_dir / "m1")

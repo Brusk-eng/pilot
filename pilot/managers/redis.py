@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import socket
 import subprocess
 import time
 from collections.abc import Iterator
@@ -12,6 +11,7 @@ from pilot.config import RedisConfig
 from pilot.exceptions import BenchError
 from pilot.managers.packages import get_package_manager
 from pilot.managers.platform import is_macos, which
+from pilot.utils import is_port_listening
 
 if TYPE_CHECKING:
     from pilot.core.bench import Bench
@@ -74,7 +74,7 @@ class RedisManager:
     def running(self) -> Iterator[None]:
         """Serve the bench's Redis for the duration, for commands such as migrate
         that need it while the bench is stopped. Servers already up are left alone."""
-        stopped = {name: port for name, port in self.servers.items() if not is_serving(port)}
+        stopped = {name: port for name, port in self.servers.items() if not is_port_listening(port)}
         processes = [
             subprocess.Popen(
                 [redis_server_binary() or "redis-server", str(self.bench.config_path / name)],
@@ -98,17 +98,9 @@ class RedisManager:
         (self.bench.config_path / filename).write_text(content)
 
 
-def is_serving(port: int) -> bool:
-    try:
-        with socket.create_connection(("127.0.0.1", port), timeout=0.2):
-            return True
-    except OSError:
-        return False
-
-
 def wait_until_serving(port: int, timeout: float = 10.0) -> None:
     deadline = time.monotonic() + timeout
-    while not is_serving(port):
+    while not is_port_listening(port):
         if time.monotonic() > deadline:
             raise BenchError(f"Redis did not start on port {port} within {timeout:.0f}s.")
         time.sleep(0.1)
