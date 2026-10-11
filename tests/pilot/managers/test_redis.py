@@ -1,5 +1,3 @@
-"""Tests for RedisManager.running: Redis served for the duration of a command."""
-
 from __future__ import annotations
 
 from collections.abc import Iterator

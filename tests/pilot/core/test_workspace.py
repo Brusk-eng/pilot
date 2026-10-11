@@ -1,5 +1,3 @@
-"""Tests for `pilot dev`: an app repository developed on its own linked bench."""
-
 from __future__ import annotations
 
 import json
