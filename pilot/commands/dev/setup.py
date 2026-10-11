@@ -21,7 +21,7 @@ class DevSetupCommand(Command):
     ] = None
     frappe_branch: Annotated[
         str | None,
-        Arg(help="Frappe branch for a new bench (default: the app's version-N branch, otherwise develop)."),
+        Arg(help="Frappe branch for a new bench (default: the checked-out version-N branch, or develop)."),
     ] = None
 
     def run(self) -> None:

@@ -61,8 +61,7 @@ branch = "version-15"
 branches = ["version-15", "develop"]
 ```
 
-A linked app uses `path` instead of `repo` and `branch`. Pilot symlinks that checkout into `apps/` and never pulls,
-switches, or checks out commits in it. `pilot dev setup` writes this entry:
+A linked app uses `path` instead of `repo` and `branch`. Pilot symlinks that checkout into `apps/` and never pulls, switches, or checks out commits in it. `pilot dev setup` writes this entry:
 
 ```toml
 [[apps]]

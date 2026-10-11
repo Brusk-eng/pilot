@@ -69,8 +69,7 @@ is checked only as far as `Class`.
 Every app must ship `pyproject.toml` with a `[tool.bench.frappe-dependencies]` table pinning the frappe versions it
 supports, and the declared ranges are compared against the versions actually installed.
 
-`Workspace` represents an app repository outside the benches directory. It finds or creates the bench that links
-the repository into `apps/`, and owns `pilot dev` setup and start. See [App Development](development.md).
+`Workspace` represents an app repository outside the benches directory. It finds or creates the bench that links the repository into `apps/`, and owns `pilot dev` setup and start. See [App Development](development.md).
 
 Database objects are created from `bench.db_type`. A bench uses one engine for its sites: `mariadb`, `postgres`, or `sqlite`.
 
