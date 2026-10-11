@@ -51,10 +51,9 @@ class BenchInitializer:
             ("Install Node.js", python_env_manager.install_node),
             ("Install Node.js dependencies", python_env_manager.install_node_dependencies),
             ("Configure Redis", self._configure_redis),
+            ("Prepare admin frontend", lambda: self._ensure_admin_frontend(on_progress)),
+            ("Generate process config", self._generate_process_config),
         ]
-        if self.bench.config.admin.enabled:
-            steps.append(("Prepare admin frontend", lambda: self._ensure_admin_frontend(on_progress)))
-        steps.append(("Generate process config", self._generate_process_config))
 
         total = len(steps)
         for i, (description, action) in enumerate(steps, start=1):
