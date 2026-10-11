@@ -28,7 +28,7 @@ benches/dev-gameplan/              created by pilot dev setup
 
 Both are fixed once the bench exists. Run `pilot dev drop` to start over with different ones.
 
-Run `pilot dev setup` again after pulling. It installs new Python and JavaScript requirements and migrates the site. If an earlier run stopped before the app was installed on the site, it installs the app first.
+Run `pilot dev setup` again after pulling. It installs new Python and JavaScript requirements, migrates the site, and builds the app's assets again. If an earlier run stopped before the app was installed on the site, it installs the app first.
 
 ## Start
 

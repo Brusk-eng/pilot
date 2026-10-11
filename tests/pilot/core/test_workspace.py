@@ -101,6 +101,7 @@ def test_setup_creates_a_linked_bench_and_reruns_only_sync_it(tmp_path: Path, be
         patch.object(Site, "install_app") as install_app,
         patch.object(Site, "migrate") as migrate,
         patch.object(RedisManager, "running") as redis_running,
+        patch.object(PythonEnvManager, "build_assets_for_app") as build_assets,
     ):
         site = workspace.setup()
         bench = workspace.bench
@@ -123,6 +124,7 @@ def test_setup_creates_a_linked_bench_and_reruns_only_sync_it(tmp_path: Path, be
     install_app.assert_not_called()
     migrate.assert_called_once()
     redis_running.assert_called_once()
+    assert [call.args[0].config.name for call in build_assets.call_args_list] == ["gameplan"]
 
     with pytest.raises(BenchError, match="uses database 'sqlite', not 'postgres'"):
         workspace.setup(db_type="postgres")
@@ -156,6 +158,7 @@ def test_setup_resumes_a_site_left_without_the_app(tmp_path: Path, benches: Path
         patch.object(Site, "install_app") as install_app,
         patch.object(Site, "migrate") as migrate,
         patch.object(RedisManager, "running"),
+        patch.object(PythonEnvManager, "build_assets_for_app"),
     ):
         workspace.setup()
 
@@ -185,6 +188,7 @@ def test_setup_after_remove_app_links_and_installs_the_app_again(tmp_path: Path,
         patch.object(Site, "install_app") as install_app,
         patch.object(Site, "migrate") as migrate,
         patch.object(RedisManager, "running"),
+        patch.object(PythonEnvManager, "build_assets_for_app"),
     ):
         workspace.setup()
 
