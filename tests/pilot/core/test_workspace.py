@@ -15,7 +15,7 @@ from pilot.core.app.repository import AppRepository
 from pilot.core.bench import Bench
 from pilot.core.site import Site
 from pilot.core.workspace import Workspace
-from pilot.exceptions import BenchError
+from pilot.exceptions import BenchError, ConfigError
 from pilot.internal.cli.dispatch import CliContext, find_bench_root
 from pilot.managers.environment import PythonEnvManager
 from pilot.managers.processes.workspace import WorkspaceProcessManager
@@ -86,6 +86,24 @@ def test_workspace_is_found_from_inside_the_repository(tmp_path: Path, benches: 
     assert workspace.app_name == "gameplan"
     assert workspace.find_bench() is None
     assert Workspace.find(tmp_path) is None
+
+
+def test_a_broken_bench_toml_fails_the_lookup_only_when_it_names_the_repository(
+    tmp_path: Path, benches: Path
+) -> None:
+    repo = make_repo(tmp_path / "gameplan")
+    (benches / "dev-other").mkdir()
+    (benches / "dev-other" / "bench.toml").write_text("[bench\nname = 'dev-other'\n")
+
+    assert Workspace(repo).find_bench() is None
+
+    (benches / "dev-gameplan").mkdir()
+    (benches / "dev-gameplan" / "bench.toml").write_text(
+        f'[[apps]]\nname = "gameplan"\npath = "{repo}"\n[bench'
+    )
+
+    with pytest.raises(ConfigError, match=r"dev-gameplan/bench\.toml"):
+        Workspace(repo).find_bench()
 
 
 def test_setup_creates_a_linked_bench_and_reruns_only_sync_it(tmp_path: Path, benches: Path) -> None:

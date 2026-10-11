@@ -7,7 +7,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pilot.exceptions import BenchError
+from pilot.exceptions import BenchError, ConfigError
 from pilot.utils import benches_dir
 
 if TYPE_CHECKING:
@@ -75,14 +75,27 @@ class Workspace:
         return bench
 
     def find_bench(self) -> "Bench | None":
-        """The bench that links this repository, if one was set up."""
+        """The bench that links this repository, if one was set up. A broken bench.toml
+        fails the lookup only when it mentions this repository."""
         from pilot.config import BenchConfig
         from pilot.core.bench import Bench
 
         for toml_path in sorted(benches_dir().glob("*/bench.toml")):
-            if self.root in BenchConfig.get_linked_app_paths(toml_path):
+            try:
+                linked_paths = BenchConfig.get_linked_app_paths(toml_path)
+            except ConfigError:
+                if self.is_mentioned_in(toml_path):
+                    raise
+                continue
+            if self.root in linked_paths:
                 return Bench(toml_path.parent)
         return None
+
+    def is_mentioned_in(self, path: Path) -> bool:
+        try:
+            return str(self.root) in path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return False
 
     @property
     def site(self) -> "Site":
