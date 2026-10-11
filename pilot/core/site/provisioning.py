@@ -93,7 +93,7 @@ class SiteProvisioner:
         from pilot.utils import write_private_text
 
         config_path = site.path / "site_config.json"
-        if not config_path.exists():
+        if not self.bench.config.admin.enabled or not config_path.exists():
             return
         config = json.loads(config_path.read_text())
         config["pilot_endpoint"] = self.bench.admin_endpoint
