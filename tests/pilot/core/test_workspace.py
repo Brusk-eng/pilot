@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -144,6 +145,26 @@ def test_setup_resumes_a_site_left_without_the_app(tmp_path: Path, benches: Path
 
     assert install_app.call_args.args[0].config.name == "gameplan"
     migrate.assert_called_once()
+
+
+def test_start_and_drop_refuse_while_the_bench_runs(tmp_path: Path, benches: Path) -> None:
+    repo = make_repo(tmp_path / "gameplan")
+    workspace = Workspace(repo)
+    with patch.object(Bench, "initialize"), patch.object(Site, "provision", side_effect=fake_provision):
+        workspace.setup()
+    bench = workspace.bench
+    (bench.env_path / "bin").mkdir(parents=True)
+    bench.python.touch()
+    bench.pids_path.mkdir(parents=True, exist_ok=True)
+    (bench.pids_path / "bench.pid").write_text(str(os.getpid()))
+
+    with pytest.raises(BenchError, match="already running"):
+        workspace.start()
+    with pytest.raises(BenchError, match="is running"):
+        workspace.drop()
+
+    assert workspace.site.exists
+    assert bench.path.exists()
 
 
 def test_a_second_checkout_gets_its_own_bench(tmp_path: Path, benches: Path) -> None:

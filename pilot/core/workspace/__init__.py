@@ -91,6 +91,12 @@ class Workspace:
     def site_url(self) -> str:
         return f"http://{self.site.config.name}:{self.bench.config.http_port}"
 
+    @property
+    def is_running(self) -> bool:
+        from pilot.managers.processes.local import ProcessManager
+
+        return ProcessManager(self.bench).is_running()
+
     def setup(
         self,
         db_type: str | None = None,
@@ -188,15 +194,16 @@ class Workspace:
         bench = self.bench
         if not bench.python.exists() or not self.site.exists:
             raise BenchError(f"Bench '{bench.config.name}' is not set up yet. Run: pilot dev setup")
-        manager = WorkspaceProcessManager(bench, bench.app(self.app_name))
-        if manager.is_running():
+        if self.is_running:
             raise BenchError(f"Bench '{bench.config.name}' is already running.")
         on_progress(f"\n  Site   {self.site_url}")
         on_progress(f"  Login  Administrator / {ADMIN_PASSWORD}\n")
-        manager.start()
+        WorkspaceProcessManager(bench, bench.app(self.app_name)).start()
 
     def drop(self, on_progress: Callable[[str], None] = lambda message: None) -> None:
         """Delete the bench and its site. The repository is left untouched."""
+        if self.is_running:
+            raise BenchError(f"Bench '{self.bench.config.name}' is running. Stop 'pilot dev start' first.")
         if self.site.exists:
             self.site.drop(on_progress, no_backup=True)
         self.bench.drop(on_progress)
