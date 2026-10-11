@@ -30,10 +30,11 @@ class WorkspaceProcessManager(ProcessManager):
     def app_dev_definition(self) -> ProcessDefinition:
         # frappe-ui's Vite plugins read these, since the app repository has no bench
         # folder above it.
+        name = f"{self.app.config.name}-dev"
         return ProcessDefinition(
-            name=self.app.config.name,
+            name=name,
             argv=[get_yarn_bin(), "dev"],
-            log_file=self.bench.logs_path / f"{self.app.config.name}-dev.log",
+            log_file=self.bench.logs_path / f"{name}.log",
             env={
                 "FRAPPE_BENCH_PATH": str(self.bench.path),
                 "FRAPPE_WEB_SERVER_PORT": str(self.bench.config.http_port),

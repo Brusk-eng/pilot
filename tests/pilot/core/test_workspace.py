@@ -293,8 +293,9 @@ def test_dev_processes_run_the_app_dev_script_without_admin(tmp_path: Path) -> N
 
     assert "admin" not in by_name
     assert {"web", "socketio", "watch"} <= by_name.keys()
-    assert by_name["gameplan"].argv[-1] == "dev"
-    assert by_name["gameplan"].env == {
+    assert by_name["gameplan-dev"].argv[-1] == "dev"
+    assert by_name["gameplan-dev"].log_file == bench.logs_path / "gameplan-dev.log"
+    assert by_name["gameplan-dev"].env == {
         "FRAPPE_BENCH_PATH": str(bench.path),
         "FRAPPE_WEB_SERVER_PORT": str(bench.config.http_port),
     }
