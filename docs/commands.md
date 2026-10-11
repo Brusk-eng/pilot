@@ -18,7 +18,7 @@ Bench commands with `--bench NAME` can run from outside the bench directory. `Be
 
 Run these inside a cloned app repository. See [App Development](development.md).
 
-- `pilot dev setup`: create a bench for the app and a site with the app installed. Running it again installs new requirements and migrates the site. `--database` picks `sqlite` (default), `mariadb`, or `postgres`. `--frappe-branch` overrides the Frappe branch.
+- `pilot dev setup`: create a bench for the app and a site with the app installed. Safe to run again. See [Setup](development.md#setup) for the options, their defaults, and what a re-run does.
 - `pilot dev start`: run the bench in the foreground, with the app's own `dev` script if `package.json` has one.
 - `pilot dev info`: show the bench, site URL, database, and Frappe branch.
 - `pilot dev drop`: delete the bench and its site. The repository is not touched. It fails while `pilot dev start` runs.
