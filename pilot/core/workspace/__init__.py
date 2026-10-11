@@ -66,7 +66,7 @@ class Workspace:
         branch = GitRepo(self.root).branch
         return branch if re.fullmatch(r"version-\d+", branch) else "develop"
 
-    @property
+    @cached_property
     def bench(self) -> "Bench":
         bench = self.find_bench()
         if bench is None:
@@ -75,22 +75,21 @@ class Workspace:
 
     def find_bench(self) -> "Bench | None":
         """The bench that links this repository, if one was set up."""
+        from pilot.config import BenchConfig
         from pilot.core.bench import Bench
 
         for toml_path in sorted(benches_dir().glob("*/bench.toml")):
-            if self.is_linked_from(toml_path):
+            if self.root in BenchConfig.get_linked_app_paths(toml_path):
                 return Bench(toml_path.parent)
         return None
 
-    def is_linked_from(self, toml_path: Path) -> bool:
-        try:
-            apps = tomllib.loads(toml_path.read_text()).get("apps", [])
-        except (OSError, tomllib.TOMLDecodeError):
-            return False
-        return any(app.get("path") == str(self.root) for app in apps)
+    @property
+    def site(self) -> "Site":
+        return self.bench.site(f"{self.bench.config.name}.localhost")
 
-    def site(self, bench: "Bench") -> "Site":
-        return bench.site(f"{bench.config.name}.localhost")
+    @property
+    def site_url(self) -> str:
+        return f"http://{self.site.config.name}:{self.bench.config.http_port}"
 
     def setup(
         self,
@@ -102,22 +101,19 @@ class Workspace:
         up to date with the repository. Safe to run again."""
         if self.app_name == "frappe":
             raise BenchError("Pilot dev cannot develop the frappe framework itself yet.")
-        bench = self.find_bench()
-        if bench is None:
-            bench = self.create_bench(
+        if self.find_bench() is None:
+            self.bench = self.create_bench(
                 db_type or DEFAULT_DB_TYPE, frappe_branch or self.default_frappe_branch, on_progress
             )
+        self.ensure_matches(db_type, frappe_branch)
+        if not self.bench.python.exists():
+            self.bench.initialize(on_progress)
+        if self.site.exists:
+            self.sync(on_progress)
         else:
-            self.ensure_matches(bench, db_type, frappe_branch)
-        if not bench.python.exists():
-            bench.initialize(on_progress)
-        site = self.site(bench)
-        if site.exists:
-            self.sync(bench, site, on_progress)
-        else:
-            self.create_site(bench, on_progress)
-        self.configure_site(bench, site)
-        return site
+            self.create_site(on_progress)
+        self.configure_site()
+        return self.site
 
     def create_bench(self, db_type: str, frappe_branch: str, on_progress: Callable[[str], None]) -> "Bench":
         from pilot.config import AppConfig, BenchConfig
@@ -143,9 +139,10 @@ class Workspace:
             suffix += 1
         return name
 
-    def ensure_matches(self, bench: "Bench", db_type: str | None, frappe_branch: str | None) -> None:
+    def ensure_matches(self, db_type: str | None, frappe_branch: str | None) -> None:
         """An existing bench keeps its database and framework branch. Changing either
         means starting over, which deletes the site's data."""
+        bench = self.bench
         current = {"database": bench.config.db_type, "frappe branch": bench.config.framework_app.branch}
         requested = {"database": db_type, "frappe branch": frappe_branch}
         for label, value in requested.items():
@@ -155,52 +152,47 @@ class Workspace:
                     "Run 'pilot dev drop' first to start over."
                 )
 
-    def create_site(self, bench: "Bench", on_progress: Callable[[str], None]) -> "Site":
+    def create_site(self, on_progress: Callable[[str], None]) -> "Site":
         from pilot.core.site import Site
 
-        name = self.site(bench).config.name
-        return Site.provision(bench, name, [self.app_name], ADMIN_PASSWORD, on_progress=on_progress)
+        return Site.provision(
+            self.bench, self.site.config.name, [self.app_name], ADMIN_PASSWORD, on_progress=on_progress
+        )
 
-    def configure_site(self, bench: "Bench", site: "Site") -> None:
+    def configure_site(self) -> None:
         """Turn on developer mode, and make this the site that Frappe commands
         without --site use."""
         from pilot.config.common_site_config import update_common_site_config
 
-        site.set_config_values({"developer_mode": 1})
-        with update_common_site_config(bench.sites_path) as config:
-            config["default_site"] = site.config.name
+        self.site.set_config_values({"developer_mode": 1})
+        with update_common_site_config(self.bench.sites_path) as config:
+            config["default_site"] = self.site.config.name
 
-    def sync(self, bench: "Bench", site: "Site", on_progress: Callable[[str], None]) -> None:
+    def sync(self, on_progress: Callable[[str], None]) -> None:
         """Catch up with a pulled repository: new requirements and schema changes."""
         from pilot.managers.redis import RedisManager
 
-        bench.install_requirements(on_progress)
-        on_progress(f"Migrating {site.config.name}...")
-        with RedisManager(bench.config.redis, bench).running():
-            site.migrate()
+        self.bench.install_requirements(on_progress)
+        on_progress(f"Migrating {self.site.config.name}...")
+        with RedisManager(self.bench.config.redis, self.bench).running():
+            self.site.migrate()
 
     def start(self, on_progress: Callable[[str], None] = lambda message: None) -> None:
         """Run the bench in the foreground until interrupted."""
         from pilot.managers.processes.workspace import WorkspaceProcessManager
 
         bench = self.bench
-        site = self.site(bench)
-        if not bench.python.exists() or not site.exists:
+        if not bench.python.exists() or not self.site.exists:
             raise BenchError(f"Bench '{bench.config.name}' is not set up yet. Run: pilot dev setup")
         manager = WorkspaceProcessManager(bench, bench.app(self.app_name))
         if manager.is_running():
             raise BenchError(f"Bench '{bench.config.name}' is already running.")
-        on_progress(f"\n  Site   {self.site_url(bench)}")
+        on_progress(f"\n  Site   {self.site_url}")
         on_progress(f"  Login  Administrator / {ADMIN_PASSWORD}\n")
         manager.start()
 
-    def site_url(self, bench: "Bench") -> str:
-        return f"http://{self.site(bench).config.name}:{bench.config.http_port}"
-
     def drop(self, on_progress: Callable[[str], None] = lambda message: None) -> None:
         """Delete the bench and its site. The repository is left untouched."""
-        bench = self.bench
-        site = self.site(bench)
-        if site.exists:
-            site.drop(on_progress, no_backup=True)
-        bench.drop(on_progress)
+        if self.site.exists:
+            self.site.drop(on_progress, no_backup=True)
+        self.bench.drop(on_progress)

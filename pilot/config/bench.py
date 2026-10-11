@@ -418,6 +418,15 @@ class BenchConfig:
         return Toml.loads(cls.toml_path(bench_root).read_text(encoding="utf-8"))
 
     @classmethod
+    def get_linked_app_paths(cls, bench_root: Path) -> list[Path]:
+        """Checkouts linked into apps/, parsed without validation so one broken bench.toml reads as empty."""
+        try:
+            apps = cls.read_raw(bench_root).get("apps", [])
+        except (OSError, tomllib.TOMLDecodeError):
+            return []
+        return [Path(app["path"]) for app in apps if app.get("path")]
+
+    @classmethod
     def read_flat(cls, bench_root: Path) -> dict:
         """Wizard's flat-key settings dict (parse-only)."""
         with open(cls.toml_path(bench_root), "rb") as fh:

@@ -23,7 +23,7 @@ class DevInfoCommand(Command):
             "Bench": f"{bench.config.name} ({bench.path})",
             "Frappe": bench.config.framework_app.branch,
             "Database": bench.config.db_type,
-            "Site": workspace.site_url(bench),
+            "Site": workspace.site_url,
         }
         for label, value in rows.items():
             self.report(f"{label:<10}{value}")
