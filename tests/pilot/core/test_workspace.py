@@ -168,6 +168,21 @@ def test_linked_app_is_a_symlink_whose_git_state_pilot_never_touches(tmp_path: P
         bench.app("gameplan").update()
 
 
+def test_removing_a_linked_app_unlinks_it_and_keeps_the_checkout(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path / "src" / "gameplan")
+    bench = make_bench(tmp_path / "bench")
+    bench.create_directories()
+    App(AppConfig(name="gameplan", repo="", branch="", path=str(repo)), bench).link()
+    (bench.sites_path / "apps.txt").write_text("frappe\ngameplan\n")
+
+    with patch.object(App, "_pip_uninstall"):
+        bench.app("gameplan").remove()
+
+    assert not (bench.apps_path / "gameplan").is_symlink()
+    assert (repo / "gameplan" / "hooks.py").exists()
+    assert bench.registered_apps() == ["frappe"]
+
+
 def test_linked_app_builds_from_source_with_the_bench_path(tmp_path: Path) -> None:
     repo = make_repo(tmp_path / "src" / "gameplan")
     (repo / "frontend").mkdir()
