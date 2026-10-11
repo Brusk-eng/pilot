@@ -224,9 +224,13 @@ class App:
         self.path.symlink_to(source, target_is_directory=True)
 
     def ensure_not_linked(self) -> None:
-        if self.is_linked:
+        """Refuse git work in, and moves of, a checkout symlinked into apps/, even
+        when this App was made without its bench.toml entry."""
+        paths = (self.path, self.existing_clone_path)
+        symlink = next((path for path in paths if path and path.is_symlink()), None)
+        if self.is_linked or symlink:
             raise BenchError(
-                f"'{self.config.name}' is linked to {self.path.resolve()}. "
+                f"'{self.config.name}' is linked to {(symlink or self.path).resolve()}. "
                 "Pull, switch branches, or check out commits in that checkout yourself."
             )
 
@@ -346,6 +350,7 @@ class App:
         if self.bench.is_app_installed(self.config.name):
             return self._skip_already_installed(on_progress, install_dependencies)
 
+        self.ensure_not_linked()
         existing_clone = self.existing_clone_path
         self.is_staged = not self.is_marketplace
         if self.is_staged or existing_clone is None:
