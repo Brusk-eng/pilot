@@ -11,6 +11,7 @@ from pilot.exceptions import BenchError
 from pilot.utils import benches_dir
 
 if TYPE_CHECKING:
+    from pilot.config import BenchConfig
     from pilot.core.bench import Bench
     from pilot.core.site import Site
 
@@ -125,15 +126,15 @@ class Workspace:
         from pilot.config import AppConfig
         from pilot.core.bench import Bench
 
+        def configure(config: BenchConfig) -> None:
+            config.admin.enabled = False
+            config.allow_developer_mode = True
+            config.framework_app.branch = frappe_branch
+            config.apps.append(AppConfig(name=self.app_name, repo="", branch="", path=str(self.root)))
+
         name = self.new_bench_name()
         on_progress(f"Creating bench '{name}' ({db_type}, frappe {frappe_branch}) for {self.root}")
-        return Bench.create_at(
-            benches_dir() / name,
-            name,
-            db_type=db_type,
-            settings={"admin_enabled": False, "allow_developer_mode": True, "app_branch": frappe_branch},
-            apps=[AppConfig(name=self.app_name, repo="", branch="", path=str(self.root))],
-        )
+        return Bench.create_at(benches_dir() / name, name, db_type=db_type, configure=configure)
 
     def new_bench_name(self) -> str:
         slug = re.sub(r"[^a-z0-9]+", "-", self.root.name.lower()).strip("-") or "app"

@@ -9,7 +9,7 @@ from pilot.exceptions import BenchAlreadyExistsError
 from pilot.utils import iter_sibling_benches
 
 if TYPE_CHECKING:
-    from pilot.config import AppConfig
+    from pilot.config import BenchConfig
     from pilot.core.bench import Bench
 
 
@@ -27,8 +27,7 @@ class BenchCreator:
         admin_tls: bool | None = None,
         db_type: str = "mariadb",
         admin_password: str = "",
-        settings: dict | None = None,
-        apps: list["AppConfig"] | None = None,
+        configure: Callable[["BenchConfig"], None] | None = None,
     ) -> None:
         self.target_directory = target_directory
         self.name = name
@@ -37,8 +36,7 @@ class BenchCreator:
         self.admin_tls = admin_tls
         self.db_type = db_type
         self.admin_password = admin_password
-        self.settings = settings or {}
-        self.apps = apps or []
+        self.configure = configure
 
     def run(self, on_progress: Callable[[str], None] = lambda message: None) -> "Bench":
         from pilot.config import BenchConfig
@@ -58,9 +56,10 @@ class BenchCreator:
 
         offset = self._pick_port_offset(self.target_directory)
         on_progress("Writing bench.toml")
-        settings = {**self._initial_settings(), **self.settings}
+        settings = self._initial_settings()
         config = BenchConfig.from_flat(self.name, settings, port_offset=offset, benches_root=benches_dir)
-        config.apps.extend(self.apps)
+        if self.configure:
+            self.configure(config)
         config.write(self.target_directory)
 
         admin_port = BenchConfig.default_ports()["admin.port"] + offset
