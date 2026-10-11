@@ -108,10 +108,9 @@ class Workspace:
         up to date with the repository. Safe to run again."""
         if self.app_name == "frappe":
             raise BenchError("Pilot dev cannot develop the frappe framework itself yet.")
-        if self.find_bench() is None:
-            self.bench = self.create_bench(
-                db_type or DEFAULT_DB_TYPE, frappe_branch or self.default_frappe_branch, on_progress
-            )
+        self.bench = self.find_bench() or self.create_bench(
+            db_type or DEFAULT_DB_TYPE, frappe_branch or self.default_frappe_branch, on_progress
+        )
         self.ensure_matches(db_type, frappe_branch)
         if not self.bench.python.exists():
             self.bench.initialize(on_progress)
