@@ -32,6 +32,7 @@ class BenchInventory:
                 name=app_path.name,
                 repo=self._git_remote(app_path),
                 branch=self._git_branch(app_path) or self._configured_branch(app_path.name),
+                path=self._configured_path(app_path.name),
             ),
             self.bench,
         )
@@ -51,6 +52,7 @@ class BenchInventory:
                             name=app_path.name,
                             repo=self._git_remote(app_path),
                             branch=self._git_branch(app_path) or self._configured_branch(app_path.name),
+                            path=self._configured_path(app_path.name),
                         ),
                         self.bench,
                     )
@@ -133,3 +135,7 @@ class BenchInventory:
     def _configured_branch(self, name: str) -> str:
         """The branch bench.toml records for this app, used when a pinned checkout leaves it detached."""
         return next((app.branch for app in self.bench.config.apps if app.name == name), "")
+
+    def _configured_path(self, name: str) -> str:
+        """The checkout bench.toml links into apps/ for this app, empty for a cloned app."""
+        return next((app.path for app in self.bench.config.apps if app.name == name), "")

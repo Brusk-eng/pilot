@@ -41,6 +41,16 @@ def make_repo(path: Path, name: str = "gameplan", dev_script: bool = True) -> Pa
     return path
 
 
+def make_linked_bench(path: Path, repo: Path) -> Bench:
+    """A bench whose bench.toml links `repo` into apps/gameplan."""
+    bench = make_bench(path)
+    bench.create_directories()
+    app_config = AppConfig(name="gameplan", repo="", branch="", path=str(repo))
+    bench.config.apps.append(app_config)
+    App(app_config, bench).link()
+    return bench
+
+
 def fake_provision(bench: Bench, name: str, apps: list[str], admin_password: str, **_) -> Site:
     site = bench.site(name)
     site.path.mkdir(parents=True)
@@ -177,23 +187,19 @@ def test_a_second_checkout_gets_its_own_bench(tmp_path: Path, benches: Path) -> 
 
 def test_linked_app_is_a_symlink_whose_git_state_pilot_never_touches(tmp_path: Path) -> None:
     repo = make_repo(tmp_path / "src" / "gameplan")
-    bench = make_bench(tmp_path / "bench")
-    bench.create_directories()
-    app = App(AppConfig(name="gameplan", repo="", branch="", path=str(repo)), bench)
-
-    app.link()
+    bench = make_linked_bench(tmp_path / "bench", repo)
+    (bench.apps_path / "helpdesk").symlink_to(make_repo(tmp_path / "src" / "helpdesk", name="helpdesk"))
 
     assert (bench.apps_path / "gameplan").resolve() == repo
     assert bench.app("gameplan").is_linked
+    assert not bench.app("helpdesk").is_linked
     with pytest.raises(BenchError, match="is linked to"):
         bench.app("gameplan").update()
 
 
 def test_removing_a_linked_app_unlinks_it_and_keeps_the_checkout(tmp_path: Path) -> None:
     repo = make_repo(tmp_path / "src" / "gameplan")
-    bench = make_bench(tmp_path / "bench")
-    bench.create_directories()
-    App(AppConfig(name="gameplan", repo="", branch="", path=str(repo)), bench).link()
+    bench = make_linked_bench(tmp_path / "bench", repo)
     (bench.sites_path / "apps.txt").write_text("frappe\ngameplan\n")
 
     with patch.object(App, "_pip_uninstall"):
@@ -208,9 +214,7 @@ def test_linked_app_builds_from_source_with_the_bench_path(tmp_path: Path) -> No
     repo = make_repo(tmp_path / "src" / "gameplan")
     (repo / "frontend").mkdir()
     (repo / "frontend" / "package.json").write_text("{}")
-    bench = make_bench(tmp_path / "bench")
-    bench.create_directories()
-    (bench.apps_path / "gameplan").symlink_to(repo)
+    bench = make_linked_bench(tmp_path / "bench", repo)
     builder = PythonAssetBuilder(PythonEnvManager(bench))
 
     with (
@@ -228,10 +232,7 @@ def test_linked_app_builds_from_source_with_the_bench_path(tmp_path: Path) -> No
 
 
 def test_dev_processes_run_the_app_dev_script_without_admin(tmp_path: Path) -> None:
-    repo = make_repo(tmp_path / "src" / "gameplan")
-    bench = make_bench(tmp_path / "bench")
-    bench.create_directories()
-    (bench.apps_path / "gameplan").symlink_to(repo)
+    bench = make_linked_bench(tmp_path / "bench", make_repo(tmp_path / "src" / "gameplan"))
 
     definitions = WorkspaceProcessManager(bench, bench.app("gameplan"))._process_definitions()
     by_name = {definition.name: definition for definition in definitions}

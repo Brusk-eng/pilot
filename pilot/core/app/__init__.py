@@ -211,7 +211,7 @@ class App:
     @property
     def is_linked(self) -> bool:
         """A local checkout symlinked into apps/. Its git state belongs to the developer."""
-        return self.config.is_linked or self.path.is_symlink()
+        return self.config.is_linked
 
     def link(self) -> None:
         """Symlink the local checkout at config.path into apps/."""
