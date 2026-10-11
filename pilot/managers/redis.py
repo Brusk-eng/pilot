@@ -74,22 +74,24 @@ class RedisManager:
     def running(self) -> Iterator[None]:
         """Serve the bench's Redis for the duration, for commands such as migrate
         that need it while the bench is stopped. Servers already up are left alone."""
-        stopped = {name: port for name, port in self.servers.items() if not is_port_listening(port)}
-        processes = [
-            subprocess.Popen(
-                [redis_server_binary() or "redis-server", str(self.bench.config_path / name)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            for name in stopped
-        ]
+        processes: list[subprocess.Popen] = []
         try:
-            for port in stopped.values():
+            for name, port in self.servers.items():
+                if is_port_listening(port):
+                    continue
+                processes.append(
+                    subprocess.Popen(
+                        [redis_server_binary() or "redis-server", str(self.bench.config_path / name)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                )
                 wait_until_serving(port)
             yield
         finally:
             for process in processes:
                 process.terminate()
+            for process in processes:
                 process.wait(timeout=10)
 
     def _write_config(self, filename: str, port: int) -> None:
