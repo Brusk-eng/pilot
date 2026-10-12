@@ -293,9 +293,9 @@ def test_linked_app_builds_from_source_with_the_bench_path(tmp_path: Path) -> No
 
     with (
         patch("pilot.core.app.prebuilt_assets.PrebuiltAssets") as prebuilt,
-        patch.object(PythonAssetBuilder, "ensure_yarn_install"),
+        patch("pilot.core.app.node_packages.shutil.which", side_effect=lambda name: name),
+        patch("pilot.core.app.node_packages.run_command"),
         patch.object(PythonAssetBuilder, "run_compiler") as run_compiler,
-        patch("pilot.managers.python_assets.get_yarn_bin", return_value="yarn"),
     ):
         builder.build_assets_for_app(bench.app("gameplan"))
 
@@ -308,12 +308,13 @@ def test_linked_app_builds_from_source_with_the_bench_path(tmp_path: Path) -> No
 def test_dev_processes_run_the_app_dev_script_without_admin(tmp_path: Path) -> None:
     bench = make_linked_bench(tmp_path / "bench", make_repo(tmp_path / "src" / "gameplan"))
 
-    definitions = WorkspaceProcessManager(bench, bench.app("gameplan"))._process_definitions()
+    with patch("pilot.core.app.node_packages.shutil.which", side_effect=lambda name, **_: name):
+        definitions = WorkspaceProcessManager(bench, bench.app("gameplan"))._process_definitions()
     by_name = {definition.name: definition for definition in definitions}
 
     assert "admin" not in by_name
     assert {"web", "socketio", "watch"} <= by_name.keys()
-    assert by_name["gameplan-dev"].argv[-1] == "dev"
+    assert by_name["gameplan-dev"].argv == ["yarn", "run", "dev"]
     assert by_name["gameplan-dev"].log_file == bench.logs_path / "gameplan-dev.log"
     assert by_name["gameplan-dev"].env == {
         "FRAPPE_BENCH_PATH": str(bench.path),

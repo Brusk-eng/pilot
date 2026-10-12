@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
+from pilot.core.app.node_packages import NodePackages
 from pilot.managers.processes.definitions import ProcessDefinition
 from pilot.managers.processes.local import ProcessManager
-from pilot.utils import get_yarn_bin
 
 if TYPE_CHECKING:
     from pilot.core.app import App
@@ -33,7 +33,7 @@ class WorkspaceProcessManager(ProcessManager):
         name = f"{self.app.config.name}-dev"
         return ProcessDefinition(
             name=name,
-            argv=[get_yarn_bin(), "dev"],
+            argv=NodePackages(self.app.path).get_script_command("dev"),
             log_file=self.bench.logs_path / f"{name}.log",
             env={
                 "FRAPPE_BENCH_PATH": str(self.bench.path),
