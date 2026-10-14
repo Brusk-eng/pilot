@@ -1128,11 +1128,18 @@ def test_start_dev_initialized_stops_then_starts(tmp_path: Path) -> None:
     start.assert_called_once()
 
 
-def test_start_dev_watch_admin_js_from_config_skips_static_admin_build(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("admin_enabled", "watch_admin_js", "builds_admin"),
+    [(True, False, True), (True, True, False), (False, False, False)],
+)
+def test_start_dev_builds_static_admin_only_when_admin_runs_without_watcher(
+    tmp_path: Path, admin_enabled: bool, watch_admin_js: bool, builds_admin: bool
+) -> None:
     from pilot.core.bench.runtime import BenchRuntime
 
     bench = make_bench(tmp_path)
-    bench.config.watch_admin_js = True
+    bench.config.admin.enabled = admin_enabled
+    bench.config.watch_admin_js = watch_admin_js
     _mark_initialized(bench)
     with (
         patch("pilot.managers.processes.local.ProcessManager.stop"),
@@ -1142,7 +1149,7 @@ def test_start_dev_watch_admin_js_from_config_skips_static_admin_build(tmp_path:
     ):
         BenchRuntime(bench).start(lambda _message: None)
 
-    ensure_admin_dist.assert_not_called()
+    assert ensure_admin_dist.call_count == int(builds_admin)
 
 
 def test_start_production_uninitialized_brings_up_admin(tmp_path: Path) -> None:
