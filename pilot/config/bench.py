@@ -422,9 +422,9 @@ class BenchConfig:
         """Resolved checkouts linked into apps/, parsed without validation."""
         try:
             apps = cls.read_raw(bench_root).get("apps", [])
-        except (OSError, tomllib.TOMLDecodeError) as error:
+            return [Path(app["path"]).resolve() for app in apps if app.get("path")]
+        except (OSError, RuntimeError, tomllib.TOMLDecodeError) as error:
             raise ConfigError(f"Cannot read {cls.toml_path(bench_root)}: {error}") from error
-        return [Path(app["path"]).resolve() for app in apps if app.get("path")]
 
     @classmethod
     def read_flat(cls, bench_root: Path) -> dict:

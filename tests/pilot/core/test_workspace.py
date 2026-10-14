@@ -116,6 +116,28 @@ def test_a_bench_linking_the_repository_through_a_symlink_is_found(tmp_path: Pat
     assert found.path == bench.path
 
 
+def test_another_bench_linking_a_symlink_loop_does_not_stop_the_lookup(tmp_path: Path, benches: Path) -> None:
+    repo = make_repo(tmp_path / "gameplan")
+    loop = tmp_path / "loop"
+    loop.symlink_to(loop)
+    (benches / "dev-crm").mkdir()
+    (benches / "dev-crm" / "bench.toml").write_text(f'[[apps]]\nname = "crm"\npath = "{loop}"\n')
+    bench = make_linked_bench(benches / "dev-gameplan", repo)
+    bench.config.write(bench.path)
+    resolve = Path.resolve
+
+    def resolve_like_python_3_11(path: Path, strict: bool = False) -> Path:
+        if path == loop:
+            raise RuntimeError(f"Symlink loop from {path}")
+        return resolve(path, strict)
+
+    with patch.object(Path, "resolve", resolve_like_python_3_11):
+        found = Workspace(repo).find_bench()
+
+    assert found is not None
+    assert found.path == bench.path
+
+
 def test_setup_creates_a_linked_bench_and_reruns_only_sync_it(tmp_path: Path, benches: Path) -> None:
     repo = make_repo(tmp_path / "gameplan")
     workspace = Workspace(repo)
