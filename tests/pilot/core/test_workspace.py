@@ -104,6 +104,18 @@ def test_a_broken_bench_toml_fails_the_lookup_only_when_it_names_the_repository(
         Workspace(repo).find_bench()
 
 
+def test_a_bench_linking_the_repository_through_a_symlink_is_found(tmp_path: Path, benches: Path) -> None:
+    repo = make_repo(tmp_path / "Projects" / "gameplan")
+    (tmp_path / "code").symlink_to(tmp_path / "Projects", target_is_directory=True)
+    bench = make_linked_bench(benches / "dev-gameplan", tmp_path / "code" / "gameplan")
+    bench.config.write(bench.path)
+
+    found = Workspace(repo).find_bench()
+
+    assert found is not None
+    assert found.path == bench.path
+
+
 def test_setup_creates_a_linked_bench_and_reruns_only_sync_it(tmp_path: Path, benches: Path) -> None:
     repo = make_repo(tmp_path / "gameplan")
     workspace = Workspace(repo)
