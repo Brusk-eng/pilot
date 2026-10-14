@@ -106,6 +106,8 @@ tls = true
 allow_bench_management = true
 ```
 
+With `enabled = false`, `pilot start` does not run the Admin. `pilot dev setup` creates benches this way.
+
 Nginx proxies admin traffic to `port + 1` on localhost. In production, `admin.domain` is required. `allow_bench_management` permits this admin to manage sibling benches and defaults to enabled only for development installs.
 
 Set the admin password with `pilot set-admin-password` or the Settings page. Pilot stores a PBKDF2-HMAC-SHA256 verifier. `jwt_secret` is local; `jwks_url` and `jwks_audience` are for a remote token issuer and are host-shared. Pilot keeps the issuer's public keys in `.jwks-cache.json` in the benches directory. A token whose key is in the cache is verified without a fetch, and a cache older than one minute is refreshed in the background. A key that is not in the cache causes a fetch, at most once every 30 seconds. A failed fetch keeps the cached keys.

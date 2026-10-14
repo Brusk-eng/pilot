@@ -217,9 +217,7 @@ class Workspace:
         PythonEnvManager(self.bench).build_assets_for_app(app)
 
     def start(self, on_progress: Callable[[str], None] = lambda message: None) -> None:
-        """Run the bench in the foreground until interrupted."""
-        from pilot.managers.processes.workspace import WorkspaceProcessManager
-
+        """Run the bench in the foreground until interrupted, as `pilot start` does."""
         bench = self.bench
         if not bench.python.exists() or not self.site.exists:
             raise BenchError(f"Bench '{bench.config.name}' is not set up yet. Run: pilot dev setup")
@@ -227,7 +225,7 @@ class Workspace:
             raise BenchError(f"Bench '{bench.config.name}' is already running.")
         on_progress(f"\n  Site   {self.site_url}")
         on_progress(f"  Login  Administrator / {ADMIN_PASSWORD}\n")
-        WorkspaceProcessManager(bench, bench.app(self.app_name)).start()
+        bench.start(on_progress)
 
     def drop(self, on_progress: Callable[[str], None] = lambda message: None) -> None:
         """Delete the bench and its site. The repository is left untouched."""

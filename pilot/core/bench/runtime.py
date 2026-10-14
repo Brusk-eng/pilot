@@ -130,7 +130,7 @@ class BenchRuntime:
             return
         manager = ProcessManager(self.bench)
         self._rebuild_manager_config(manager)
-        if not manager.watch_admin_js:
+        if self.bench.config.admin.enabled and not manager.watch_admin_js:
             self._ensure_admin_dist(on_progress)
         manager.start()
 

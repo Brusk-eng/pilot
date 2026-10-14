@@ -32,7 +32,9 @@ Run `pilot dev setup` again after pulling. It installs new Python and JavaScript
 
 ## Start
 
-`pilot dev start` runs web, socketio, workers, Redis, and the asset watcher. It does not run the Admin. If the app's `package.json` has a `dev` script, it runs that too, with `FRAPPE_WEB_SERVER_PORT` set so frappe-ui's Vite proxy reaches this bench.
+`pilot dev start` runs web, socketio, workers, Redis, and the asset watcher. The bench has the Admin disabled, so the Admin does not run. If the app's `package.json` has a `dev` script, it runs that too, with `FRAPPE_WEB_SERVER_PORT` set so frappe-ui's Vite proxy reaches this bench.
+
+Both come from `bench.toml`, not from the command, so `pilot start` inside the repository runs the same processes. `pilot dev start` also checks that setup finished and prints the site URL and login.
 
 The repository's real path is outside the bench, so tools that look for the bench by walking up from the app cannot find it. Pilot sets `FRAPPE_BENCH_PATH` for asset builds and the `dev` script instead. Apps built with frappe-ui need a frappe-ui version that reads it. Older versions fail to build the frontend and cannot resolve imports such as `../../../../sites/common_site_config.json`.
 

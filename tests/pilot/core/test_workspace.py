@@ -16,7 +16,7 @@ from pilot.core.workspace import Workspace
 from pilot.exceptions import BenchError, ConfigError
 from pilot.internal.cli.dispatch import CliContext, find_bench_root
 from pilot.managers.environment import PythonEnvManager
-from pilot.managers.processes.workspace import WorkspaceProcessManager
+from pilot.managers.processes.local import ProcessManager
 from pilot.managers.python_assets import PythonAssetBuilder
 from pilot.managers.redis import RedisManager
 from tests.pilot.commands.test_commands import make_bench
@@ -305,21 +305,26 @@ def test_linked_app_builds_from_source_with_the_bench_path(tmp_path: Path) -> No
         assert call.kwargs["env"]["FRAPPE_BENCH_PATH"] == str(bench.path)
 
 
-def test_dev_processes_run_the_app_dev_script_without_admin(tmp_path: Path) -> None:
-    bench = make_linked_bench(tmp_path / "bench", make_repo(tmp_path / "src" / "gameplan"))
+def test_the_bench_config_decides_admin_and_the_app_dev_script(tmp_path: Path) -> None:
+    linked = make_linked_bench(tmp_path / "linked", make_repo(tmp_path / "src" / "gameplan"))
+    linked.config.admin.enabled = False
+    plain = make_bench(tmp_path / "plain")
+    plain.config.admin.enabled = True
 
     with patch("pilot.core.app.node_packages.shutil.which", side_effect=lambda name, **_: name):
-        definitions = WorkspaceProcessManager(bench, bench.app("gameplan"))._process_definitions()
-    by_name = {definition.name: definition for definition in definitions}
+        linked_processes = {pd.name: pd for pd in ProcessManager(linked)._process_definitions()}
+        plain_processes = {pd.name for pd in ProcessManager(plain)._process_definitions()}
 
-    assert "admin" not in by_name
-    assert {"web", "socketio", "watch"} <= by_name.keys()
-    assert by_name["gameplan-dev"].argv == ["yarn", "run", "dev"]
-    assert by_name["gameplan-dev"].log_file == bench.logs_path / "gameplan-dev.log"
-    assert by_name["gameplan-dev"].env == {
-        "FRAPPE_BENCH_PATH": str(bench.path),
-        "FRAPPE_WEB_SERVER_PORT": str(bench.config.http_port),
+    assert "admin" not in linked_processes
+    assert {"web", "socketio", "watch"} <= linked_processes.keys()
+    assert linked_processes["gameplan-dev"].argv == ["yarn", "run", "dev"]
+    assert linked_processes["gameplan-dev"].working_dir == linked.apps_path / "gameplan"
+    assert linked_processes["gameplan-dev"].env == {
+        "FRAPPE_BENCH_PATH": str(linked.path),
+        "FRAPPE_WEB_SERVER_PORT": str(linked.config.http_port),
     }
+    assert "admin" in plain_processes
+    assert not any(name.endswith("-dev") for name in plain_processes)
 
 
 def test_bench_commands_inside_the_repository_use_its_bench(
