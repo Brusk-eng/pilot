@@ -62,8 +62,8 @@ class ProcessDefinitionBuilder:
         return defs
 
     def process_definitions(self) -> list[ProcessDefinition]:
-        """The dev runner's processes. A bench with the Admin disabled runs none of its
-        processes, and each linked app with a `dev` script runs that script."""
+        """The dev runner's processes. With the Admin disabled, neither the Admin nor its
+        UI dev server runs. Each linked app with a `dev` script runs that script."""
         has_admin = self.bench.config.admin.enabled
         defs = [self.to_dev(pd) for pd in self.prod_process_definitions() if has_admin or pd.name != "admin"]
         if self.bench.config.watch_apps_js:
