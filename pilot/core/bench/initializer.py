@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 from collections.abc import Callable
 from typing import TYPE_CHECKING
@@ -72,18 +73,18 @@ class BenchInitializer:
                 on_progress(f"    Warning: rollback step failed - {e}")
         on_progress("\nRollback complete. bench.toml is preserved - fix the issue and run init again.")
 
-    def _remove_bench_dirs(self) -> None:
-        for name in _BENCH_DIRS:
-            p = self.bench.path / name
-            if p.exists() or p.is_symlink():
-                shutil.rmtree(p, ignore_errors=True)
+    def _remove_bench_dirs(self, names: list[str]) -> None:
+        for name in names:
+            shutil.rmtree(self.bench.path / name, ignore_errors=True)
 
     def _create_bench_structure(self) -> None:
+        new_dirs = [name for name in _BENCH_DIRS if not os.path.lexists(self.bench.path / name)]
         self.bench.create_directories()
         self.bench.write_common_site_config()
         with update_common_site_config(self.bench.sites_path) as config:
             config.setdefault("server_script_enabled", True)
-        self._rollback_actions.append(("bench directories", self._remove_bench_dirs))
+        if new_dirs:
+            self._rollback_actions.append(("bench directories", lambda: self._remove_bench_dirs(new_dirs)))
 
     def _create_virtualenv(self, python_env_manager) -> None:
         python_env_manager.ensure_python()
