@@ -127,6 +127,8 @@ class Workspace:
         self.ensure_matches(db_type, frappe_branch)
         if not self.bench.python.exists():
             self.bench.initialize(on_progress)
+        elif not self.site.exists:
+            self.resume_initialization(on_progress)
         self.restore_app(on_progress)
         if self.site.exists:
             self.sync(on_progress)
@@ -134,6 +136,19 @@ class Workspace:
             self.create_site(on_progress)
         self.configure_site()
         return self.site
+
+    def resume_initialization(self, on_progress: Callable[[str], None]) -> None:
+        """Run initialization again for a bench an earlier setup left without a site,
+        for example after Ctrl-C. Its steps skip work that is already done."""
+        name = self.bench.config.name
+        on_progress(f"Resuming the setup of bench '{name}'...")
+        try:
+            self.bench.initialize(on_progress)
+        except Exception as error:
+            raise BenchError(
+                f"Bench '{name}' is incomplete and could not be resumed: {error}\n"
+                "Run 'pilot dev drop', then 'pilot dev setup'."
+            ) from error
 
     def create_bench(self, db_type: str, frappe_branch: str, on_progress: Callable[[str], None]) -> "Bench":
         from pilot.config import AppConfig

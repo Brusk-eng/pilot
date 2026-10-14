@@ -180,6 +180,36 @@ def test_setup_creates_a_linked_bench_and_reruns_only_sync_it(tmp_path: Path, be
         workspace.setup(db_type="postgres")
 
 
+def test_setup_resumes_an_interrupted_initialization(tmp_path: Path, benches: Path) -> None:
+    workspace = Workspace(make_repo(tmp_path / "gameplan"))
+
+    def interrupted_initialize(bench: Bench, *args, **kwargs) -> None:
+        fake_initialize(bench)
+        (bench.env_path / "bin").mkdir(parents=True)
+        bench.python.touch()
+        raise KeyboardInterrupt
+
+    with (
+        patch.object(Bench, "initialize", autospec=True, side_effect=interrupted_initialize),
+        pytest.raises(KeyboardInterrupt),
+    ):
+        workspace.setup()
+    with (
+        patch.object(Bench, "initialize", autospec=True, side_effect=RuntimeError("clone failed")),
+        pytest.raises(BenchError, match="could not be resumed: clone failed\nRun 'pilot dev drop'"),
+    ):
+        workspace.setup()
+    with (
+        patch.object(Bench, "initialize", autospec=True) as initialize,
+        patch.object(PythonEnvManager, "install_app"),
+        patch.object(Site, "provision", side_effect=fake_provision),
+    ):
+        workspace.setup()
+
+    initialize.assert_called_once()
+    assert workspace.site.exists
+
+
 def test_setup_resumes_a_site_left_without_the_app(tmp_path: Path, benches: Path) -> None:
     repo = make_repo(tmp_path / "gameplan")
 

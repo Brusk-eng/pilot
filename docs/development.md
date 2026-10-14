@@ -30,6 +30,8 @@ Both are fixed once the bench exists. Run `pilot dev drop` to start over with di
 
 Run `pilot dev setup` again after pulling. It installs new Python and JavaScript requirements, migrates the site, and builds the app's assets again. If an earlier run stopped before the app was installed on the site, it installs the app first.
 
+If an earlier run stopped before the site was created, for example with Ctrl-C, setup resumes the bench's initialization. Steps that already finished, such as the Frappe clone, are skipped. If the bench cannot be resumed, setup says so: run `pilot dev drop`, then `pilot dev setup`.
+
 ## Start
 
 `pilot dev start` runs web, socketio, workers, Redis, and the asset watcher. The bench has the Admin disabled, so the Admin does not run. If the app's `package.json` has a `dev` script, it runs that too, with `FRAPPE_WEB_SERVER_PORT` set so frappe-ui's Vite proxy reaches this bench.
