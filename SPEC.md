@@ -79,6 +79,7 @@ Use `@step` for visible progress and `@on_success`, `@on_failure`, or `@on_cance
 - [Architecture](docs/architecture.md)
 - [App Development](docs/development.md)
 - [Commands](docs/commands.md)
+- [Development proxies](docs/development-proxies.md)
 - [Configuration](docs/configuration.md)
 - [Tasks](docs/tasks.md)
 - [Migrations](docs/migration.md)
