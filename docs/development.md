@@ -28,6 +28,8 @@ benches/dev-gameplan/              created by pilot dev setup
 
 Both are fixed once the bench exists. Run `pilot dev drop` to start over with different ones.
 
+Setup records the bench's name in `pilot-bench` inside the repository's git directory. Pilot commands run inside the repository read it to find the bench. If the record is missing or names a bench that no longer links the repository, Pilot looks through every bench's `bench.toml` instead. `pilot dev drop` removes the record.
+
 Run `pilot dev setup` again after pulling. It installs new Python and JavaScript requirements, migrates the site, and builds the app's assets again. If an earlier run stopped before the app was installed on the site, it installs the app first.
 
 If an earlier run stopped before the site was created, for example with Ctrl-C, setup resumes the bench's initialization. Steps that already finished, such as the Frappe clone, are skipped. If the bench cannot be resumed, setup says so: run `pilot dev drop`, then `pilot dev setup`.

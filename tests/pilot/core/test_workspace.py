@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
@@ -34,7 +35,7 @@ def make_repo(path: Path, name: str = "gameplan", dev_script: bool = True) -> Pa
     (path / name).mkdir(parents=True)
     (path / name / "hooks.py").write_text(f"app_name = '{name}'\n")
     (path / "pyproject.toml").write_text(f'[project]\nname = "{name}"\n')
-    (path / ".git").mkdir()
+    subprocess.run(["git", "init", "-q", str(path)], check=True)
     scripts = {"dev": "vite"} if dev_script else {}
     (path / "package.json").write_text(json.dumps({"scripts": scripts}))
     return path
@@ -86,21 +87,22 @@ def test_workspace_is_found_from_inside_the_repository(tmp_path: Path, benches: 
     assert Workspace.find(tmp_path) is None
 
 
-def test_a_broken_bench_toml_fails_the_lookup_only_when_it_names_the_repository(
-    tmp_path: Path, benches: Path
-) -> None:
+def test_the_bench_recorded_in_the_git_directory_is_looked_up_first(tmp_path: Path, benches: Path) -> None:
     repo = make_repo(tmp_path / "gameplan")
-    (benches / "dev-other").mkdir()
-    (benches / "dev-other" / "bench.toml").write_text("[bench\nname = 'dev-other'\n")
+    bench = make_linked_bench(benches / "dev-gameplan", repo)
+    bench.config.write(bench.path)
+    (benches / "dev-broken").mkdir()
+    (benches / "dev-broken" / "bench.toml").write_text("[bench\nname = 'dev-broken'\n")
+    record = repo / ".git" / "pilot-bench"
 
-    assert Workspace(repo).find_bench() is None
+    found = Workspace(repo).find_bench()
+    record.write_text("dev-gone\n")
+    found_past_a_stale_record = Workspace(repo).find_bench()
 
-    (benches / "dev-gameplan").mkdir()
-    (benches / "dev-gameplan" / "bench.toml").write_text(
-        f'[[apps]]\nname = "gameplan"\npath = "{repo}"\n[bench'
-    )
-
-    with pytest.raises(ConfigError, match=r"dev-gameplan/bench\.toml"):
+    assert found is not None and found.path == bench.path
+    assert found_past_a_stale_record is not None and found_past_a_stale_record.path == bench.path
+    record.write_text("dev-broken\n")
+    with pytest.raises(ConfigError, match=r"dev-broken/bench\.toml"):
         Workspace(repo).find_bench()
 
 
@@ -160,6 +162,7 @@ def test_setup_creates_a_linked_bench_and_reruns_only_sync_it(tmp_path: Path, be
         workspace.setup()
 
     assert bench.path == benches / "dev-gameplan"
+    assert (repo / ".git" / "pilot-bench").read_text() == "dev-gameplan\n"
     assert bench.config.db_type == "sqlite"
     assert bench.config.framework_app.branch == "develop"
     assert not bench.config.admin.enabled
@@ -279,7 +282,7 @@ def test_setup_after_remove_app_links_and_installs_the_app_again(tmp_path: Path,
     migrate.assert_called_once()
 
 
-def test_start_and_drop_refuse_while_the_bench_runs(tmp_path: Path, benches: Path) -> None:
+def test_start_and_drop_wait_for_the_bench_to_stop(tmp_path: Path, benches: Path) -> None:
     repo = make_repo(tmp_path / "gameplan")
     workspace = Workspace(repo)
     with (
@@ -301,6 +304,12 @@ def test_start_and_drop_refuse_while_the_bench_runs(tmp_path: Path, benches: Pat
 
     assert workspace.site.exists
     assert bench.path.exists()
+
+    (bench.pids_path / "bench.pid").unlink()
+    with patch.object(Site, "drop"), patch.object(Bench, "drop"):
+        workspace.drop()
+
+    assert not (repo / ".git" / "pilot-bench").exists()
 
 
 def test_a_second_checkout_gets_its_own_bench(tmp_path: Path, benches: Path) -> None:

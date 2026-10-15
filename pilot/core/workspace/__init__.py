@@ -75,27 +75,42 @@ class Workspace:
         return bench
 
     def find_bench(self) -> "Bench | None":
-        """The bench that links this repository, if one was set up. A broken bench.toml
-        fails the lookup only when it mentions this repository."""
-        from pilot.config import BenchConfig
+        """The bench that links this repository. Reads the bench that setup recorded
+        in the git directory, and scans the benches directory when that record is
+        missing or stale. A broken bench.toml fails the lookup only when it is recorded."""
         from pilot.core.bench import Bench
 
+        name = self.recorded_bench_name
+        if name and self.is_linked_by(benches_dir() / name):
+            return Bench(benches_dir() / name)
         for toml_path in sorted(benches_dir().glob("*/bench.toml")):
             try:
-                linked_paths = BenchConfig.get_linked_app_paths(toml_path)
+                if self.is_linked_by(toml_path.parent):
+                    return Bench(toml_path.parent)
             except ConfigError:
-                if self.is_mentioned_in(toml_path):
-                    raise
                 continue
-            if self.root in linked_paths:
-                return Bench(toml_path.parent)
         return None
 
-    def is_mentioned_in(self, path: Path) -> bool:
+    def is_linked_by(self, bench_root: Path) -> bool:
+        from pilot.config import BenchConfig
+
+        toml_path = bench_root / "bench.toml"
+        return toml_path.exists() and self.root in BenchConfig.get_linked_app_paths(toml_path)
+
+    @cached_property
+    def bench_record(self) -> Path | None:
+        """The file in the repository's git directory that names its bench."""
+        from pilot.internal.git import GitRepo
+
+        git_dir = GitRepo(self.root).git_dir
+        return git_dir / "pilot-bench" if git_dir else None
+
+    @property
+    def recorded_bench_name(self) -> str:
         try:
-            return str(self.root) in path.read_text(encoding="utf-8", errors="replace")
+            return self.bench_record.read_text().strip() if self.bench_record else ""
         except OSError:
-            return False
+            return ""
 
     @property
     def site(self) -> "Site":
@@ -124,6 +139,8 @@ class Workspace:
         self.bench = self.find_bench() or self.create_bench(
             db_type or DEFAULT_DB_TYPE, frappe_branch or self.default_frappe_branch, on_progress
         )
+        if self.bench_record:
+            self.bench_record.write_text(f"{self.bench.path.name}\n")
         self.ensure_matches(db_type, frappe_branch)
         if not self.bench.python.exists():
             self.bench.initialize(on_progress)
@@ -249,3 +266,5 @@ class Workspace:
         if self.site.exists:
             self.site.drop(on_progress, no_backup=True)
         self.bench.drop(on_progress)
+        if self.bench_record:
+            self.bench_record.unlink(missing_ok=True)
