@@ -36,12 +36,6 @@ class GitRepo:
         return (self.path / ".git").exists()
 
     @property
-    def git_dir(self) -> Path | None:
-        """Absolute git directory. Each worktree has its own."""
-        path = self._text("rev-parse", "--absolute-git-dir")
-        return Path(path) if path else None
-
-    @property
     def branch(self) -> str:
         """Current branch name, or '' when detached (e.g. a tag/commit checkout)."""
         return self._text("branch", "--show-current")
@@ -158,6 +152,10 @@ class GitRepo:
     def checkout_new_branch(self, branch: str, start_point: str) -> bool:
         """Create (or reset) `branch` to start at `start_point` and check it out."""
         return self._run("checkout", "-B", branch, start_point).returncode == 0
+
+    @property
+    def git_dir(self) -> Path:
+        return Path(self._text("rev-parse", "--absolute-git-dir"))
 
     def set_remote_url(self, url: str) -> bool:
         """Point origin at *url*; returns False instead of raising on failure."""

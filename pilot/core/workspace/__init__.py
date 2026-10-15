@@ -102,8 +102,8 @@ class Workspace:
         """The file in the repository's git directory that names its bench."""
         from pilot.internal.git import GitRepo
 
-        git_dir = GitRepo(self.root).git_dir
-        return git_dir / "pilot-bench" if git_dir else None
+        repo = GitRepo(self.root)
+        return repo.git_dir / "pilot-bench" if repo.is_cloned else None
 
     @property
     def recorded_bench_name(self) -> str:

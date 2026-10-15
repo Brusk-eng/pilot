@@ -171,3 +171,22 @@ def test_failed_initialization_keeps_folders_from_an_earlier_run(tmp_path: Path)
     assert (tmp_path / "sites" / "other.localhost").is_dir()
     assert (tmp_path / "env" / "bin").is_dir()
     assert not (tmp_path / "logs").exists()
+
+
+def test_a_failed_init_keeps_the_task_records(tmp_path: Path) -> None:
+    """The wizard runs init as a task; deleting `tasks/` cut its event stream ("Lost connection")."""
+    bench = make_bench(tmp_path)
+    record = bench.path / "tasks" / "20261015-000000-abcdef" / "meta.json"
+    record.parent.mkdir(parents=True)
+    record.write_text("{}")
+    initializer = BenchInitializer(bench)
+
+    def create_structure_then_fail(on_progress) -> None:
+        initializer._create_bench_structure()
+        raise BenchError("clone failed")
+
+    with patch.object(initializer, "_run_steps", create_structure_then_fail), pytest.raises(BenchError):
+        initializer.run()
+
+    assert record.exists()
+    assert not bench.apps_path.exists()

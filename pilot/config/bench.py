@@ -163,7 +163,7 @@ class BenchConfig:
     @classmethod
     def default(cls, name: str = "", benches_root: Path | None = None) -> "BenchConfig":
         """Build a fresh config from the setup wizard's baseline values."""
-        common = CommonConfig.read(benches_root) if benches_root else _DEFAULT_COMMON_CONFIG
+        common = CommonConfig.read(benches_root) if benches_root else copy.deepcopy(_DEFAULT_COMMON_CONFIG)
         data = copy.deepcopy(_DEFAULT_DATA)
         data["bench"]["name"] = name
         return cls._from_dict(data, common=common)
@@ -205,6 +205,7 @@ class BenchConfig:
                 branch=a.get("branch", ""),
                 branches=a.get("branches", []),
                 path=a.get("path", ""),
+                follow_branch=bool(a.get("follow_branch", False)),
             )
             for a in data.get("apps", [])
         ]
@@ -268,6 +269,7 @@ class BenchConfig:
         self.redis.validate()
         self.workers.validate()
         self.letsencrypt.validate()
+        self.mariadb.validate()
         self.gunicorn.validate()
         self.build.validate()
         self.lite_mode.validate()
@@ -563,6 +565,8 @@ class BenchConfig:
             app_data: ConfigDict = {"name": app.name, "repo": app.repo, "branch": app.branch}
             if app.branches:
                 app_data["branches"] = app.branches
+            if app.follow_branch:
+                app_data["follow_branch"] = True
             apps.append(app_data)
         return apps
 
