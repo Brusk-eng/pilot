@@ -13,6 +13,7 @@ from pilot.core.app import App
 from pilot.core.app.repository import AppRepository
 from pilot.core.bench import Bench
 from pilot.core.site import Site
+from pilot.core.site.provisioning import SiteProvisioner
 from pilot.core.workspace import Workspace
 from pilot.exceptions import BenchError, ConfigError
 from pilot.internal.cli.dispatch import CliContext, find_bench_root
@@ -237,15 +238,21 @@ def test_setup_resumes_a_site_left_without_the_app(tmp_path: Path, benches: Path
 
     with (
         patch.object(Bench, "install_requirements"),
+        patch.object(Bench, "write_common_site_config"),
         patch.object(Site, "installed_apps", return_value=["frappe"]),
         patch.object(Site, "install_app") as install_app,
+        patch.object(Site, "enable_scheduler") as enable_scheduler,
         patch.object(Site, "migrate") as migrate,
+        patch.object(SiteProvisioner, "write_pilot_communication_config"),
+        patch.object(SiteProvisioner, "add_to_hosts"),
+        patch.object(SiteProvisioner, "reload_nginx"),
         patch.object(RedisManager, "running"),
         patch.object(PythonEnvManager, "build_assets_for_app"),
     ):
         workspace.setup()
 
     assert install_app.call_args.args[0].config.name == "gameplan"
+    enable_scheduler.assert_called_once_with()
     migrate.assert_called_once()
 
 
@@ -267,9 +274,14 @@ def test_setup_after_remove_app_links_and_installs_the_app_again(tmp_path: Path,
     with (
         patch.object(PythonEnvManager, "install_app") as install_into_environment,
         patch.object(Bench, "install_requirements"),
+        patch.object(Bench, "write_common_site_config"),
         patch.object(Site, "installed_apps", return_value=["frappe"]),
         patch.object(Site, "install_app") as install_app,
+        patch.object(Site, "enable_scheduler"),
         patch.object(Site, "migrate") as migrate,
+        patch.object(SiteProvisioner, "write_pilot_communication_config"),
+        patch.object(SiteProvisioner, "add_to_hosts"),
+        patch.object(SiteProvisioner, "reload_nginx"),
         patch.object(RedisManager, "running"),
         patch.object(PythonEnvManager, "build_assets_for_app"),
     ):

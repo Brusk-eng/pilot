@@ -232,8 +232,8 @@ class Workspace:
 
     def sync(self, on_progress: Callable[[str], None]) -> None:
         """Catch up with a pulled repository: new requirements, schema changes, and
-        the app's assets. Also installs the app if an interrupted setup left the
-        site without it."""
+        the app's assets. Also finishes the site's setup if an interrupted setup
+        left the site without the app."""
         from pilot.managers.environment import PythonEnvManager
         from pilot.managers.redis import RedisManager
 
@@ -242,8 +242,7 @@ class Workspace:
         self.bench.install_requirements(on_progress)
         with RedisManager(self.bench.config.redis, self.bench).running():
             if self.app_name not in site.installed_apps():
-                on_progress(f"Installing {self.app_name} on {site.config.name}...")
-                site.install_app(app)
+                site.finish_provisioning([self.app_name], on_progress)
             on_progress(f"Migrating {site.config.name}...")
             site.migrate()
         PythonEnvManager(self.bench).build_assets_for_app(app)
