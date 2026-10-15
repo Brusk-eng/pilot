@@ -425,7 +425,7 @@ class BenchConfig:
         try:
             apps = cls.read_raw(bench_root).get("apps", [])
             return [Path(app["path"]).resolve() for app in apps if app.get("path")]
-        except (OSError, RuntimeError, tomllib.TOMLDecodeError) as error:
+        except (OSError, RuntimeError, AttributeError, TypeError, tomllib.TOMLDecodeError) as error:
             raise ConfigError(f"Cannot read {cls.toml_path(bench_root)}: {error}") from error
 
     @classmethod

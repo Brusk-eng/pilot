@@ -94,6 +94,10 @@ def test_the_bench_recorded_in_the_git_directory_is_looked_up_first(tmp_path: Pa
     bench.config.write(bench.path)
     (benches / "dev-broken").mkdir()
     (benches / "dev-broken" / "bench.toml").write_text("[bench\nname = 'dev-broken'\n")
+    (benches / "dev-crm").mkdir()
+    (benches / "dev-crm" / "bench.toml").write_text('[[apps]]\nname = "crm"\npath = 123\n')
+    (benches / "dev-hrms").mkdir()
+    (benches / "dev-hrms" / "bench.toml").write_text("apps = ['hrms']\n")
     record = repo / ".git" / "pilot-bench"
 
     found = Workspace(repo).find_bench()
