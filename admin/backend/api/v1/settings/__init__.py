@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, Response, current_app, jsonify, request
 
 from admin.backend.api.responses import error_response
 from admin.backend.api.v1.settings.config import ConfigPatcher
@@ -267,6 +267,27 @@ def audit_log():
         return paginated_response(fetch_newest, limit, offset)
     except Exception:
         return error_response("audit_unavailable", "Could not read audit events.", 500)
+
+
+@audit_bp.get("/audit-events/export")
+def export_audit_log():
+    """Download filtered bench audit events as CSV."""
+    from pilot.core.bench.audit_log import AuditLog
+
+    bench_root = Path(current_app.config["BENCH_ROOT"])
+    try:
+        body = AuditLog(Bench(bench_root)).get_csv(
+            entry_type=request.args.get("type") or None,
+            site=request.args.get("site") or None,
+            status=request.args.get("status") or None,
+        )
+    except Exception:
+        return error_response("audit_unavailable", "Could not read audit events.", 500)
+    return Response(
+        body,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{bench_root.name}-activity.csv"'},
+    )
 
 
 @network_bp.get("/network/client")

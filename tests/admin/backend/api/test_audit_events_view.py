@@ -103,3 +103,26 @@ def test_an_invalid_cursor_is_treated_as_the_start(tmp_path: Path) -> None:
         )
 
     assert response.get_json()["data"] == entries[:2]
+
+
+def test_export_downloads_filtered_events_as_csv(tmp_path: Path) -> None:
+    from pilot.core.bench import Bench
+    from pilot.core.bench.audit_log import AuditLog
+
+    bench_root = tmp_path / "benches" / "current"
+    client = _client(bench_root)
+    log = AuditLog(Bench(bench_root))
+    log.append(
+        "backup", {"site": "a.test", "event": "backup", "status": "failed", "files": {"db": "x.sql.gz"}}
+    )
+    log.append("ssh_key", {"event": "added"})
+
+    response = client.get("/api/v1/audit-events/export", query_string={"type": "backup"})
+
+    lines = response.get_data(as_text=True).splitlines()
+    assert response.status_code == 200
+    assert response.headers["Content-Disposition"] == 'attachment; filename="current-activity.csv"'
+    assert lines[0] == "logged_at,type,event,site,app,status,actor,ip,command,task_id,details"
+    assert len(lines) == 2
+    assert ",backup,backup,a.test,,failed," in lines[1]
+    assert '""files"": {""db"": ""x.sql.gz""}' in lines[1]

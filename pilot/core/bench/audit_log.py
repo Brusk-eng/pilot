@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import csv
+import io
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -42,6 +45,10 @@ class AuditEntry:
     file: str | None = None
     name: str | None = None
 
+
+CSV_COLUMNS = ("logged_at", "type", "event", "site", "app", "status", "actor", "ip", "command", "task_id")
+
+
 # Extra fields merged into every audit entry. The admin backend registers a provider that
 # reads the current request (IP + actor); the CLI/worker leave the empty default.
 def _context_provider() -> dict:
@@ -81,6 +88,18 @@ class AuditLog:
                 if limit is not None and len(matched) >= limit:
                     break
         return matched
+
+    def get_csv(self, entry_type=None, site=None, status=None) -> str:
+        """Matching records newest first as CSV; fields outside the main columns go in `details` as JSON."""
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([*CSV_COLUMNS, "details"])
+        for record in self.entries(entry_type=entry_type, site=site, status=status):
+            details = {key: value for key, value in record.items() if key not in CSV_COLUMNS}
+            writer.writerow(
+                [*(record.get(column, "") for column in CSV_COLUMNS), json.dumps(details) if details else ""]
+            )
+        return output.getvalue()
 
     @staticmethod
     def _matches(record: dict, entry_type, site, status, jti=None) -> bool:
