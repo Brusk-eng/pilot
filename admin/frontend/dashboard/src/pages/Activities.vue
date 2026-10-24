@@ -6,6 +6,7 @@ import { type RouteLocationRaw, useRoute, useRouter } from 'vue-router'
 import ListSkeleton from '@/components/common/ListSkeleton.vue'
 import Table from '@/components/common/Table.vue'
 
+import { auditApi } from '@/api/audit'
 import { useActivities } from '@/composables/activities/useActivities'
 import { useSites } from '@/composables/sites/useSites'
 import type { AuditEntry } from '@/types/audit'
@@ -196,6 +197,13 @@ const currentFilters = computed(() => ({
 
 const reload = () => load(currentFilters.value)
 
+const exportUrl = computed(() =>
+  auditApi.exportUrl({
+    ...(typeFilter.value && { type: typeFilter.value }),
+    ...(siteFilter.value && { site: siteFilter.value }),
+  }),
+)
+
 watch(siteFilter, reload)
 onMounted(reload)
 onMounted(() => {
@@ -222,6 +230,7 @@ onMounted(() => {
       <Button :loading icon-left="lucide-refresh-cw" class="md:ml-auto" @click="reload">
         Refresh
       </Button>
+      <Button :link="exportUrl" icon-left="lucide-download">Download</Button>
     </div>
 
     <ListSkeleton v-if="loading" class="first:mt-4" />
