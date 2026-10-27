@@ -1,5 +1,3 @@
-"""`pilot init`: existing database handling, the --no-dev opt-out, and --commit."""
-
 from __future__ import annotations
 
 from pathlib import Path
