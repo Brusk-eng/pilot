@@ -24,7 +24,7 @@ def run(benches_root: Path) -> None:
 
 def import_queue_timeouts(bench_dir: Path) -> None:
     """bench.toml owns the queue timeouts now, so carry over the ones set by hand.
-    A group keeps one timeout, so it takes the longest of its queues."""
+    A group keeps one timeout, so it takes the longest of its queues, counting Frappe's default for the rest."""
     from pilot.config import BenchConfig
     from pilot.config.common_site_config import read_common_site_config
     from pilot.exceptions import ConfigError
@@ -36,19 +36,23 @@ def import_queue_timeouts(bench_dir: Path) -> None:
         groups = config.workers.groups
         before = [group.timeout for group in groups]
         for group in groups:
-            timeouts = [
-                timeout
-                for queue in group.queues
-                if (timeout := get_hand_set_timeout(bench_dir, entries, queue))
-            ]
-            if group.timeout is None and timeouts:
-                group.timeout = max(timeouts)
+            if group.timeout is None:
+                group.timeout = get_imported_timeout(bench_dir, entries, group.queues)
         try:
             config.workers.validate()
         except ConfigError as error:
             for group, timeout in zip(groups, before, strict=True):
                 group.timeout = timeout
             print(f"{bench_dir.name}: set the worker timeouts in Settings again ({error})")
+
+
+def get_imported_timeout(bench_dir: Path, entries: dict, queues: list[str]) -> int | None:
+    from pilot.config.worker import frappe_default_timeout
+
+    timeouts = {queue: get_hand_set_timeout(bench_dir, entries, queue) for queue in queues}
+    if not any(timeouts.values()):
+        return None
+    return max(timeout or frappe_default_timeout(queue) for queue, timeout in timeouts.items())
 
 
 def get_hand_set_timeout(bench_dir: Path, entries: dict, queue: str) -> int | None:

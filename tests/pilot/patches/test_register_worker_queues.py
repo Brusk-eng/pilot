@@ -63,6 +63,18 @@ def test_hand_set_timeouts_move_to_bench_toml(tmp_path: Path) -> None:
     }
 
 
+def test_an_imported_timeout_covers_frappes_defaults(tmp_path: Path) -> None:
+    bench_dir = _bench_dir(
+        tmp_path,
+        '[[workers]]\nqueues = ["default", "short", "long"]\ncount = 1\n',
+        {"workers": {"default": {"timeout": 600}}},
+    )
+
+    import_queue_timeouts(bench_dir)
+
+    assert BenchConfig.read(bench_dir).workers.groups[0].timeout == 1500
+
+
 def test_conflicting_hand_set_timeouts_are_not_imported(tmp_path: Path, capsys) -> None:
     workers = '[[workers]]\nqueues = ["default"]\ncount = 1\n\n[[workers]]\nqueues = ["default", "long"]\ncount = 1\n'
     bench_dir = _bench_dir(

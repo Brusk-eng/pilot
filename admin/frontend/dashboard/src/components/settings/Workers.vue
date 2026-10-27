@@ -26,12 +26,20 @@ const toGroupForm = (group: WorkerGroupSettings): WorkerGroupForm => {
   }
 }
 
+// Mirrors WorkerConfig.collapse: a blank timeout counts as Frappe's default.
+const frappeDefaultTimeout = (queue: string) => (queue === 'long' ? 1500 : 300)
+
+const effectiveTimeout = (group: WorkerGroupSettings) => {
+  return group.timeout || Math.max(0, ...(group.queues || []).map(frappeDefaultTimeout))
+}
+
 const collapse = (groups: WorkerGroupSettings[]): WorkerGroupSettings[] => {
+  const hasTimeout = groups.some((group) => group.timeout)
   return [
     {
       queues: [...new Set(groups.flatMap((group) => group.queues || []))],
       count: groups.reduce((total, group) => total + group.count, 0),
-      timeout: Math.max(0, ...groups.map((group) => group.timeout || 0)) || null,
+      timeout: hasTimeout ? Math.max(...groups.map(effectiveTimeout)) : null,
     },
   ]
 }

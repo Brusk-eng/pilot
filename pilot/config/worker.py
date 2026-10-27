@@ -16,6 +16,11 @@ def parse_timeout(value):
     return None if value in (None, "") else value
 
 
+def frappe_default_timeout(queue: str) -> int:
+    """The job timeout Frappe gives a queue that sets none."""
+    return 1500 if queue == "long" else 300
+
+
 @dataclass
 class WorkerGroup:
     """One worker group: spawn ``count`` workers listening to ``queues``.
@@ -27,6 +32,11 @@ class WorkerGroup:
 
     def to_dict(self) -> dict:
         return {"queues": list(self.queues), "count": self.count, "timeout": self.timeout}
+
+    @property
+    def effective_timeout(self) -> int:
+        """Its own timeout, else the longest Frappe default of its queues."""
+        return self.timeout or max(frappe_default_timeout(queue) for queue in self.queues)
 
 
 @dataclass
@@ -58,9 +68,12 @@ class WorkerConfig:
         return sum(group.count for group in self.groups)
 
     def collapse(self) -> None:
-        """Fold the groups into one pool: the union of the queues, the total count, the longest timeout."""
-        timeouts = [group.timeout for group in self.groups if group.timeout]
-        self.groups = [WorkerGroup(queues=self.queues, count=self.count, timeout=max(timeouts, default=None))]
+        """Fold the groups into one pool: the union of the queues, the total count, the longest timeout.
+        A blank timeout counts as Frappe's default, and stays blank when every group is blank."""
+        timeout = None
+        if any(group.timeout for group in self.groups):
+            timeout = max(group.effective_timeout for group in self.groups)
+        self.groups = [WorkerGroup(queues=self.queues, count=self.count, timeout=timeout)]
 
     @classmethod
     def from_dict(cls, data: list) -> "WorkerConfig":

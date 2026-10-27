@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from pilot.config import BenchConfig, WorkerGroup
-from pilot.config.worker import parse_timeout
+from pilot.config.worker import WorkerConfig, parse_timeout
 from pilot.core.bench.settings import regenerate_configs
 from pilot.exceptions import ConfigError, MalformedSiteConfig
 from tests.pilot.commands.test_commands import make_bench
@@ -153,6 +153,32 @@ def test_lite_mode_keeps_the_longest_timeout(tmp_path: Path) -> None:
     assert workers.groups == [
         WorkerGroup(queues=["default", "short", "long", "guard-review", "guard-base"], count=6, timeout=1500)
     ]
+
+
+def test_lite_mode_counts_a_blank_timeout_as_frappes_default() -> None:
+    workers = WorkerConfig(
+        groups=[
+            WorkerGroup(queues=["default", "short", "long"], count=1),
+            WorkerGroup(queues=["guard-review"], count=1, timeout=120),
+        ]
+    )
+
+    workers.collapse()
+
+    assert workers.groups[0].timeout == 1500
+
+
+def test_lite_mode_keeps_frappes_defaults_when_no_group_sets_a_timeout() -> None:
+    workers = WorkerConfig(
+        groups=[
+            WorkerGroup(queues=["default", "short", "long"], count=1),
+            WorkerGroup(queues=["guard-review"], count=1),
+        ]
+    )
+
+    workers.collapse()
+
+    assert workers.groups[0].timeout is None
 
 
 @pytest.mark.parametrize(
