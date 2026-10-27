@@ -36,18 +36,16 @@ def import_queue_timeouts(bench_dir: Path) -> bool:
     if not isinstance(entries, dict):
         return True
     with BenchConfig.open(bench_dir) as config:
-        groups = config.workers.groups
-        before = [group.timeout for group in groups]
-        for group in groups:
+        candidate = copy.deepcopy(config.workers)
+        for group in candidate.groups:
             if group.timeout is None:
                 group.timeout = get_imported_timeout(bench_dir, entries, group.queues)
         try:
-            config.workers.validate()
+            candidate.validate()
         except ConfigError as error:
-            for group, timeout in zip(groups, before, strict=True):
-                group.timeout = timeout
             print(f"{bench_dir.name}: set the worker timeouts in Settings again ({error})")
             return False
+        config.workers = candidate
     return True
 
 
