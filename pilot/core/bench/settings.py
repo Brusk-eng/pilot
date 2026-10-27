@@ -259,6 +259,7 @@ def regenerate_configs(bench: "Bench") -> None:
 
     RedisManager(bench.config.redis, bench).generate_configs()
     ProcessManager.for_bench(bench).write_config()
+    bench.write_common_site_config()
 
 
 def regenerate_nginx(bench: "Bench") -> None:

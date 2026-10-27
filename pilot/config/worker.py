@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from pilot.exceptions import ConfigError
 
 _QUEUE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+FRAPPE_QUEUES = ("default", "short", "long")
 
 
 @dataclass
@@ -26,6 +27,11 @@ class WorkerConfig:
     def queues(self) -> list[str]:
         """Every queue across the groups, deduped, order preserved."""
         return list(dict.fromkeys(queue for group in self.groups for queue in group.queues))
+
+    @property
+    def custom_queues(self) -> list[str]:
+        """Queues Frappe does not define itself."""
+        return [queue for queue in self.queues if queue not in FRAPPE_QUEUES]
 
     @property
     def count(self) -> int:

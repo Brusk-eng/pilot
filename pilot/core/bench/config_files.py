@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from pilot.config.common_site_config import update_common_site_config
+from pilot.exceptions import MalformedSiteConfig
 
 if TYPE_CHECKING:
     from pilot.config import S3Config
@@ -75,3 +76,17 @@ class BenchConfigFiles:
                 config["client_cache_max_bytes"] = _LITE_CLIENT_CACHE_BYTES
             else:
                 config.pop("client_cache_max_bytes", None)
+            self.set_custom_queues(config)
+
+    def set_custom_queues(self, config: dict) -> None:
+        """Frappe rejects a queue missing from `workers`. Keep each listed queue's own settings, such as `timeout`."""
+        queues = self.bench.config.workers.custom_queues
+        if not queues:
+            config.pop("workers", None)
+            return
+        current = config.get("workers", {})
+        if not isinstance(current, dict):
+            raise MalformedSiteConfig("common_site_config.json `workers` must be an object, fix it by hand.")
+        config["workers"] = {
+            queue: current[queue] if isinstance(current.get(queue), dict) else {} for queue in queues
+        }
