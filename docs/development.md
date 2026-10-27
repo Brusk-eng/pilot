@@ -16,7 +16,7 @@ benches/dev-gameplan/              created by pilot dev setup
   bench.toml                       [[apps]] name = "gameplan", path = "~/Projects/gameplan"
   apps/frappe                      cloned by Pilot
   apps/gameplan  ->  ~/Projects/gameplan
-  sites/dev-gameplan.localhost/    developer_mode on, Administrator / admin
+  sites/dev-gameplan.localhost/    developer_mode on, Administrator / admin, no scheduled backups
 ```
 
 ## Setup

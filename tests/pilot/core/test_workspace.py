@@ -180,6 +180,7 @@ def test_setup_creates_a_linked_bench_and_reruns_only_sync_it(tmp_path: Path, be
     assert common_site_config["default_site"] == "dev-gameplan.localhost"
     initialize.assert_called_once_with(bench, on_progress=ANY)
     provision.assert_called_once()
+    assert provision.call_args.kwargs["schedule_backups"] is False
     install_requirements.assert_called_once()
     install_app.assert_not_called()
     migrate.assert_called_once()

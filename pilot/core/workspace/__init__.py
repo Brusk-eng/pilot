@@ -234,7 +234,12 @@ class Workspace:
         from pilot.core.site import Site
 
         return Site.provision(
-            self.bench, self.site.config.name, [self.app_name], ADMIN_PASSWORD, on_progress=on_progress
+            self.bench,
+            self.site.config.name,
+            [self.app_name],
+            ADMIN_PASSWORD,
+            on_progress=on_progress,
+            schedule_backups=False,
         )
 
     def configure_site(self) -> None:
