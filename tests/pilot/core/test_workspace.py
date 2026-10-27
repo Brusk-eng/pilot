@@ -259,6 +259,7 @@ def test_setup_after_a_finished_initialization_goes_straight_to_the_site(
         pytest.raises(BenchError, match="database is down"),
     ):
         workspace.setup()
+    assert is_applied(workspace.bench.path, "enroll_sites_in_scheduled_backups")
     with (
         patch.object(Bench, "initialize", autospec=True) as initialize,
         patch.object(PythonEnvManager, "install_app"),
