@@ -65,9 +65,12 @@ class Bench:
         admin_tls: bool | None = None,
         db_type: str = "mariadb",
         admin_password: str = "",
+        configure: Callable[[BenchConfig], None] | None = None,
         on_progress: Callable[[str], None] = lambda message: None,
         frappe_branch: str | None = None,
     ) -> "Bench":
+        """Create the bench directory and bench.toml. `configure` adjusts the new
+        config before it is written."""
         from pilot.core.bench.creator import BenchCreator
 
         return BenchCreator(
@@ -79,6 +82,7 @@ class Bench:
             admin_tls=admin_tls,
             db_type=db_type,
             admin_password=admin_password,
+            configure=configure,
         ).run(on_progress)
 
     @property

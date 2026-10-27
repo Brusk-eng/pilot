@@ -72,6 +72,14 @@ branch = "develop"
 follow_branch = true
 ```
 
+A linked app uses `path` instead of `repo` and `branch`. Pilot symlinks that checkout into `apps/` and never pulls, switches, or checks out commits in it. `pilot dev setup` writes this entry:
+
+```toml
+[[apps]]
+name = "gameplan"
+path = "/home/me/Projects/gameplan"
+```
+
 A registry release is offered only when it is newer than the installed commit. A full clone checks that the release descends from it. A shallow clone fetches only the release commit, without the history between them, so a newer version decides, and between equal versions, such as `17.0.0-dev` on `develop`, a later commit date decides.
 
 `[redis]` defines separate cache and queue ports. Pilot writes them to `config/redis_cache.conf` and `config/redis_queue.conf` inside a `PILOT MANAGED BLOCK` and keeps the lines outside it, such as `loadmodule /path/to/redisearch.so`. `[[workers]]` defines queue groups, their process counts and an optional `timeout`: the default job timeout of the group's queues, in seconds. Without it, Frappe uses 1500 for `long` and 300 for other queues. Two groups cannot give one queue different timeouts. Lite mode folds the groups into one, which takes the longest timeout; there a blank timeout counts as Frappe's default for its queues. Frappe only knows `default`, `short` and `long`, so Pilot lists every other queue, and every queue with a timeout, under `workers` in `sites/common_site_config.json`. Pilot leaves entries there for queues that no worker group lists.
@@ -110,6 +118,8 @@ domain = "admin.example.com"
 tls = true
 allow_bench_management = true
 ```
+
+With `enabled = false`, `pilot start` does not run the Admin. `pilot dev setup` creates benches this way.
 
 Nginx proxies admin traffic to `port + 1` on localhost. In production, `admin.domain` is required. `allow_bench_management` permits this admin to manage sibling benches and defaults to enabled only for development installs. It also permits killing database processes and purging binlogs, because both affect every bench on the host. Database settings and the MariaDB restart do not need it.
 
