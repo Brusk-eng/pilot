@@ -843,33 +843,46 @@ def test_import_check_skips_the_throwaway_venv_when_everything_resolves(monkeypa
     ImportCheck().run(app)
 
 
-def test_validation_env_reuses_framework_source_but_packages_app(tmp_path: Path) -> None:
-    from pilot.core.app.validator.utils.tmp_env import TmpEnv
+def test_validation_env_only_installs_framework_editably(monkeypatch, tmp_path: Path) -> None:
+    from pilot.core.app.validator.utils import tmp_env as tmp_env_module
 
     _make_fake_frappe(tmp_path)
-    framework = tmp_path / "apps" / "frappe" / "frappe" / "__init__.py"
-    framework.write_text("value = 'before'\n")
     app = _make_app(
         tmp_path,
         "myapp",
-        '[project]\nname = "myapp"\nversion = "0.0.1"\ndependencies = ["frappe"]\n'
-        + _SETUPTOOLS_BUILD,
-        {"myapp/__init__.py": "value = 'before'\n"},
+        '[project]\nname = "myapp"\n',
+        {},
     )
-    env = TmpEnv()
+    commands: list[list[str]] = []
+    monkeypatch.setattr(tmp_env_module, "ensure_uv", lambda: "/installed/bin/uv")
+    monkeypatch.setattr(tmp_env_module, "run_command", lambda argv, **kwargs: commands.append(argv))
+
+    env = tmp_env_module.TmpEnv()
     try:
         env.create(app.bench)
-        env.install_app(app)
-        framework.write_text("value = 'after'\n")
-        (app.path / "myapp" / "__init__.py").write_text("value = 'after'\n")
-        result = subprocess.run(
-            [str(env.python), "-c", "import frappe, myapp; print(frappe.value, myapp.value)"],
-            cwd=tmp_path,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        assert result.stdout.strip() == "after before"
+        dependency = tmp_path / "apps" / "dependency"
+        env.install_app(app, [dependency])
+        assert commands == [
+            ["/installed/bin/uv", "venv", "--python", str(app.bench.python), str(env.path)],
+            [
+                "/installed/bin/uv",
+                "pip",
+                "install",
+                "--python",
+                str(env.python),
+                "--editable",
+                str(app.bench.apps_path / "frappe"),
+            ],
+            [
+                "/installed/bin/uv",
+                "pip",
+                "install",
+                "--python",
+                str(env.python),
+                str(dependency),
+                str(app.path),
+            ],
+        ]
     finally:
         env.delete()
 
