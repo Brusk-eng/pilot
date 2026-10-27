@@ -36,7 +36,7 @@ const load = async () => {
 
   try {
     const result = await reconcilePaymentSetup()
-    if (result.activated.length) await store.loadBilling(true)
+    if (result.activated) await store.loadBilling(true)
   } catch (exception) {
     paymentSetupError.value = getErrorMessage(exception)
   }

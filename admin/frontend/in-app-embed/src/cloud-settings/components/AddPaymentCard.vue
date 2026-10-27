@@ -244,6 +244,13 @@ const check = async () => {
       return
     }
 
+    // A failed card is final, so clear the checkout and let the customer start again.
+    if (result.status === 'Failed') {
+      checkout.value = null
+      error.value = result.message || __('We could not verify this card. Try another card.')
+      return
+    }
+
     message.value =
       result.message || __('Not confirmed yet. Finish adding the card, then check again.')
   })
@@ -389,7 +396,7 @@ const tileClass = (isSelected: boolean) => [
 
     <p class="flex items-center gap-1.5 text-p-sm text-ink-gray-5">
       <span class="lucide-info size-3.5 shrink-0" aria-hidden="true" />
-      {{ __("We don't charge your payment method now. It's saved to bill automatically when your billing cycle ends.")
+      {{ __("To check your card, we may charge a small amount and refund it. After that, we charge it only when your billing cycle ends.")
       }}
     </p>
 
