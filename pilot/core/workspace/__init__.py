@@ -143,7 +143,7 @@ class Workspace:
             self.bench_record.write_text(f"{self.bench.path.name}\n")
         self.ensure_matches(db_type, frappe_branch)
         if not self.bench.python.exists():
-            self.bench.initialize(on_progress)
+            self.bench.initialize(on_progress=on_progress)
         elif not self.site.exists:
             self.resume_initialization(on_progress)
         self.restore_app(on_progress)
@@ -160,7 +160,7 @@ class Workspace:
         name = self.bench.config.name
         on_progress(f"Resuming the setup of bench '{name}'...")
         try:
-            self.bench.initialize(on_progress)
+            self.bench.initialize(on_progress=on_progress)
         except Exception as error:
             raise BenchError(
                 f"Bench '{name}' is incomplete and could not be resumed: {error}\n"
