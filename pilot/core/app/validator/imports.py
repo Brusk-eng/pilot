@@ -191,7 +191,7 @@ class ImportCheck:
                 )
             modules[path] = []
             for item in data.get("imports", []):
-                if item.get("type") == "import" and item.get("name"):
+                if item["type"] == "import":
                     modules[path].append((item["name"], item["lineno"]))
                 elif item.get("type") == "import_from":
                     mod = self._resolve_relative_parts(
