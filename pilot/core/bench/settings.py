@@ -128,7 +128,7 @@ def is_restart_needed(old: dict, new: dict) -> bool:
 
 
 def worker_groups_payload(config: BenchConfig) -> list[dict]:
-    return [{"queues": list(group.queues), "count": group.count} for group in config.workers.groups]
+    return [group.to_dict() for group in config.workers.groups]
 
 
 def firewall_payload(config: BenchConfig) -> dict:
@@ -259,6 +259,7 @@ def regenerate_configs(bench: "Bench") -> None:
 
     RedisManager(bench.config.redis, bench).generate_configs()
     ProcessManager.for_bench(bench).write_config()
+    bench.write_common_site_config()
 
 
 def regenerate_nginx(bench: "Bench") -> None:
