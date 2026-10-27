@@ -29,7 +29,7 @@ export interface BillingSummary {
   /** The site's open free trial. Absent or null when the site is not on one. */
   trial?: BillingTrial | null
   /** The server's pending plan change, such as a converted trial's move to its paid plan. */
-  plan_change?: { progress_url: string | null } | null
+  plan_change?: { plan: string | null; progress_url: string | null } | null
 }
 
 export interface BillingTrial {
@@ -67,6 +67,7 @@ export interface PlanOptions {
   current: string | null
   /** On a free trial, the paid plan the site moves to when the trial converts. */
   selected?: string | null
+  /** Cheapest first. */
   plans: PlanOption[]
   sufficient: boolean
 }

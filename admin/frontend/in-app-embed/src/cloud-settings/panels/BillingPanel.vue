@@ -72,8 +72,12 @@ const planSubtitle = computed(() => {
 const stepLabel = (step: Step) =>
   steps.value.length > 1 ? __('Step {0} of {1}', [steps.value.indexOf(step) + 1, steps.value.length]) : ''
 
+// Kept here, because the trial is gone once the card converts it.
+const chosenPlan = ref<PlanOption | null>(null)
+
 const openSteps = (firstSteps: Step[]) => {
   removeError.value = ''
+  chosenPlan.value = null
   const needsPayment = !billing.value?.payment_method
   const needsProfile = needsPayment && !billing.value?.profile_complete
   steps.value = [...firstSteps]
@@ -81,9 +85,6 @@ const openSteps = (firstSteps: Step[]) => {
   if (needsPayment) steps.value.push('payment')
   flow.value = steps.value[0]
 }
-
-// The paid plan a trial moves to. Kept here because the trial is gone once the card converts it.
-const chosenPlan = ref<PlanOption | null>(null)
 
 const startUpgrade = () => openSteps(['plan'])
 const startPayment = () => openSteps([])
@@ -108,6 +109,12 @@ const finishPayment = async () => {
   await store.loadBilling(true)
   if (chosenPlan.value && !billing.value?.trial) flow.value = 'moving'
 }
+
+// A pending move also shows after the dialog reopens, for example when the card was added in a new tab.
+const isMoving = computed(
+  () => flow.value === 'moving' || (!flow.value && Boolean(billing.value?.plan_change?.progress_url)),
+)
+const movingPlan = computed(() => chosenPlan.value?.title || billing.value?.plan_change?.plan || '')
 
 const changePlan = () => {
   steps.value = []
@@ -223,7 +230,7 @@ const changePlanUrl = computed(() => store.state.accountLinks?.change_plan)
         @chosen="onPlanChosen"
       />
 
-      <PlanMoveCard v-else-if="flow === 'moving'" :store="store" :plan="chosenPlan?.title || ''" />
+      <PlanMoveCard v-else-if="isMoving" :store="store" :plan="movingPlan" />
 
       <section
         v-else-if="!isAddingPayment"
@@ -249,7 +256,7 @@ const changePlanUrl = computed(() => store.state.accountLinks?.change_plan)
         <ErrorMessage :message="store.state.accountLinksError" class="mt-2 sm:col-span-2" />
       </section>
 
-      <template v-if="!trial && !flow">
+      <template v-if="!trial && !flow && !isMoving">
         <section class="border rounded-6 border-outline-gray-1.5">
           <div class="grid sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-outline-gray-1.5">
             <div class="p-5">

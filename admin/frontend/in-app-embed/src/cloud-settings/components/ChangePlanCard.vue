@@ -27,7 +27,6 @@ const submitError = ref('')
 const submitting = ref(false)
 const started = ref(false)
 
-// A trial picks the paid plan it moves to. Central keeps it, and the move happens when billing starts.
 const isTrial = computed(() => Boolean(store.state.billing?.trial))
 const morePlansUrl = computed(() => store.state.accountLinks?.change_plan)
 const choice = computed(() => options.value?.plans.find((plan) => plan.name === selected.value))

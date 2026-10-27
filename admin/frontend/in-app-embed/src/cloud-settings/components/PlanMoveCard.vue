@@ -8,8 +8,8 @@ const __ = useTranslation()
 
 interface Props {
   store: Store
-  /** The paid plan the converted trial moves to. */
-  plan: string
+  /** The title of the plan the site moves to, when known. */
+  plan?: string
 }
 
 const props = defineProps<Props>()
@@ -55,7 +55,7 @@ onBeforeUnmount(stop)
   <section class="rounded-6 border border-outline-gray-1.5 p-5" role="status" aria-live="polite">
     <p class="flex items-center gap-2 text-base-semibold text-ink-gray-8">
       <span class="lucide-circle-check size-4 text-ink-green-3" aria-hidden="true" />
-      {{ __("Upgrading to {0}", [plan]) }}
+      {{ plan ? __("Upgrading to {0}", [plan]) : __("Upgrading your plan") }}
     </p>
     <p class="mt-1 text-p-sm text-ink-gray-6">
       {{ __("Billing has started, and full server access is on. Your site restarts in a few minutes while it moves to the new plan.") }}

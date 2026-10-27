@@ -32,7 +32,6 @@ const plans = (sufficient = true) => ({
   ],
 })
 
-// A trial picks the paid plan it moves to before it adds a payment method.
 const trialPlans = () => ({
   message: {
     currency: 'USD',
@@ -461,6 +460,13 @@ test('a payment method that converts the trial opens the progress page of its mo
   await chooseTrialPlan(page)
   await page.getByRole('button', { name: 'Continue with Stripe' }).click()
   await page.getByRole('button', { name: 'Check status' }).click()
+
+  await expect(page).toHaveURL(/progress=1/)
+})
+
+test('a move that is still running opens its progress page when billing opens again', async ({ page }) => {
+  const moving = { ...billing({ onTrial: null, hasCard: true }), plan_change: { plan: 'Pro', progress_url: PROGRESS_URL } }
+  await openBilling(page, { get_billing: () => ({ message: moving }), get_account_url: accountLinks })
 
   await expect(page).toHaveURL(/progress=1/)
 })
