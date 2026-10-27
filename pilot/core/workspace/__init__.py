@@ -152,10 +152,7 @@ class Workspace:
         if self.bench_record:
             self.bench_record.write_text(f"{self.bench.path.name}\n")
         self.ensure_matches(db_type, frappe_branch)
-        if not self.bench.python.exists():
-            self.bench.initialize(on_progress=on_progress)
-        elif not self.bench.is_initialized:
-            self.resume_initialization(on_progress)
+        self.initialize_bench(on_progress)
         self.restore_app(on_progress)
         if self.site.exists:
             self.sync(on_progress)
@@ -163,6 +160,13 @@ class Workspace:
             self.create_site(on_progress)
         self.configure_site()
         return self.site
+
+    def initialize_bench(self, on_progress: Callable[[str], None]) -> None:
+        """Initialize a new bench, or resume an initialization that did not finish."""
+        if not self.bench.python.exists():
+            self.bench.initialize(on_progress=on_progress)
+        elif not self.bench.is_initialized:
+            self.resume_initialization(on_progress)
 
     def resume_initialization(self, on_progress: Callable[[str], None]) -> None:
         """Run initialization again for a bench whose initialization an earlier setup
