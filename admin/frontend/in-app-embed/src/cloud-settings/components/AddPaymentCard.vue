@@ -394,22 +394,22 @@ const tileClass = (isSelected: boolean) => [
       <ErrorMessage :message="contactError" class="mt-1" />
     </div>
 
-    <p class="flex items-center gap-1.5 text-p-sm text-ink-gray-5">
-      <span class="lucide-info size-3.5 shrink-0" aria-hidden="true" />
+    <p class="flex items-start gap-1.5 text-p-sm text-ink-gray-5">
+      <span class="lucide-info mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
       {{ __("To check your card, we may charge a small amount and refund it. After that, we charge it only when your billing cycle ends.")
       }}
     </p>
 
-    <p class="flex items-center gap-1.5 text-p-sm text-ink-gray-5">
-      <template v-if="message">{{ message }}</template>
-
-      <template v-else>
-        <span class="lucide-lock size-3.5 shrink-0" aria-hidden="true" />
-        {{ __(
-            "{0} collects your payment details. This site never sees them.",
-            [gateway?.label || __("The payment gateway")],
-          ) }}
-      </template>
+    <p class="flex items-start gap-1.5 text-p-sm text-ink-gray-5">
+      <span
+        class="mt-0.5 size-3.5 shrink-0"
+        :class="message ? 'lucide-info' : 'lucide-lock'"
+        aria-hidden="true"
+      />
+      {{ message || __(
+          "{0} collects your payment details. This site never sees them.",
+          [gateway?.label || __("The payment gateway")],
+        ) }}
     </p>
 
     <div class="flex justify-end gap-2">

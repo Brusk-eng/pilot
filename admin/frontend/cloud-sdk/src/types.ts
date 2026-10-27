@@ -28,6 +28,8 @@ export interface BillingSummary {
   usage?: { name: string; percent: number; detail: string }[]
   /** The site's open free trial. Absent or null when the site is not on one. */
   trial?: BillingTrial | null
+  /** The server's pending plan change, such as a converted trial's move to its paid plan. */
+  plan_change?: { plan: string | null; progress_url: string | null } | null
 }
 
 export interface BillingTrial {
@@ -43,6 +45,7 @@ export interface BillingTrial {
 }
 
 export interface BillingTrialPlan {
+  name: string
   title: string
   /** Null until the team has a billing currency. */
   monthly_rate: number | null
@@ -62,11 +65,15 @@ export interface PlanOptions {
   provider: string | null
   region: string | null
   current: string | null
+  /** On a free trial, the paid plan the site moves to when the trial converts. */
+  selected?: string | null
+  /** Cheapest first. */
   plans: PlanOption[]
   sufficient: boolean
 }
 
-/** A queued plan change. `progress_url` is the page that follows it while the site restarts. */
+/** A queued plan change. `progress_url` is the page that follows it while the site restarts.
+ *  On a free trial nothing is queued: Central keeps the plan for the conversion. */
 export interface PlanChange {
   queued: boolean
   resized: boolean
