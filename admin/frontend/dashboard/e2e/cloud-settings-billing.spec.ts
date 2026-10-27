@@ -345,6 +345,21 @@ test('Razorpay needs a phone number before it opens', async ({ page }) => {
   expect(calls.some((call) => call.method === 'add_payment_method')).toBe(false)
 })
 
+test('a card that Central activates on return shows without Check status', async ({ page }) => {
+  let reconciled = false
+  await openBilling(page, {
+    get_billing: () => ({ message: reconciled ? billing({ onTrial: null, hasCard: true }) : billing() }),
+    get_account_url: accountLinks,
+    reconcile_payment_setup: () => {
+      reconciled = true
+      return { message: { activated: 1 } }
+    },
+  })
+
+  await expect(page.getByText('Visa •••• 4242')).toBeVisible()
+  await expect(page.getByText(/Cannot read properties/)).toHaveCount(0)
+})
+
 test('a card that fails verification says so and offers a fresh start', async ({ page }) => {
   await openBilling(page, {
     get_billing: () => ({ message: billing() }),

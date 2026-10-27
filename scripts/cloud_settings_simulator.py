@@ -153,7 +153,7 @@ class BillingSimulation:
         if method == "reconcile_payment_setup":
             if any(self.checkouts.values()):
                 self.activate_card()
-            return {"activated": ["simulated-card"] if self.card_active else []}
+            return {"activated": 1 if self.card_active else 0}
         if method == "remove_payment_method":
             self.card_active = False
             self.checkouts.clear()
