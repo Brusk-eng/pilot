@@ -212,6 +212,7 @@ def test_setup_resumes_an_interrupted_initialization(tmp_path: Path, benches: Pa
 
     def interrupted_initialize(bench: Bench, *args, **kwargs) -> None:
         fake_initialize(bench)
+        (bench.path / ".initializing").touch()
         (bench.env_path / "bin").mkdir(parents=True)
         bench.python.touch()
         raise KeyboardInterrupt
@@ -234,6 +235,34 @@ def test_setup_resumes_an_interrupted_initialization(tmp_path: Path, benches: Pa
         workspace.setup()
 
     initialize.assert_called_once()
+    assert workspace.site.exists
+
+
+def test_setup_after_a_finished_initialization_goes_straight_to_the_site(
+    tmp_path: Path, benches: Path
+) -> None:
+    workspace = Workspace(make_repo(tmp_path / "gameplan"))
+
+    def finished_initialize(bench: Bench, *args, **kwargs) -> None:
+        fake_initialize(bench)
+        (bench.env_path / "bin").mkdir(parents=True)
+        bench.python.touch()
+
+    with (
+        patch.object(Bench, "initialize", autospec=True, side_effect=finished_initialize),
+        patch.object(PythonEnvManager, "install_app"),
+        patch.object(Site, "provision", side_effect=BenchError("database is down")),
+        pytest.raises(BenchError, match="database is down"),
+    ):
+        workspace.setup()
+    with (
+        patch.object(Bench, "initialize", autospec=True) as initialize,
+        patch.object(PythonEnvManager, "install_app"),
+        patch.object(Site, "provision", side_effect=fake_provision),
+    ):
+        workspace.setup()
+
+    initialize.assert_not_called()
     assert workspace.site.exists
 
 
@@ -329,6 +358,10 @@ def test_start_and_drop_wait_for_the_bench_to_stop(tmp_path: Path, benches: Path
     bench = workspace.bench
     (bench.env_path / "bin").mkdir(parents=True)
     bench.python.touch()
+    (bench.path / ".initializing").touch()
+    with patch.object(Bench, "start"), pytest.raises(BenchError, match="not set up yet"):
+        workspace.start()
+    (bench.path / ".initializing").unlink()
     bench.pids_path.mkdir(parents=True, exist_ok=True)
     (bench.pids_path / "bench.pid").write_text(str(os.getpid()))
 

@@ -147,7 +147,7 @@ class Workspace:
         self.ensure_matches(db_type, frappe_branch)
         if not self.bench.python.exists():
             self.bench.initialize(on_progress=on_progress)
-        elif not self.site.exists:
+        elif not self.bench.is_initialized:
             self.resume_initialization(on_progress)
         self.restore_app(on_progress)
         if self.site.exists:
@@ -158,8 +158,8 @@ class Workspace:
         return self.site
 
     def resume_initialization(self, on_progress: Callable[[str], None]) -> None:
-        """Run initialization again for a bench an earlier setup left without a site,
-        for example after Ctrl-C. Its steps skip work that is already done."""
+        """Run initialization again for a bench whose initialization an earlier setup
+        did not finish, for example after Ctrl-C. Its steps skip work that is already done."""
         name = self.bench.config.name
         on_progress(f"Resuming the setup of bench '{name}'...")
         try:
@@ -254,7 +254,7 @@ class Workspace:
     def start(self, on_progress: Callable[[str], None] = lambda message: None) -> None:
         """Run the bench in the foreground until interrupted, as `pilot start` does."""
         bench = self.bench
-        if not bench.python.exists() or not self.site.exists:
+        if not bench.is_initialized or not self.site.exists:
             raise BenchError(f"Bench '{bench.config.name}' is not set up yet. Run: pilot dev setup")
         if self.is_running:
             raise BenchError(f"Bench '{bench.config.name}' is already running.")
