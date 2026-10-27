@@ -189,6 +189,24 @@ def test_setup_creates_a_linked_bench_and_reruns_only_sync_it(tmp_path: Path, be
         workspace.setup(db_type="postgres")
 
 
+def test_setup_records_the_requested_frappe_branch_and_rejects_an_invalid_one(
+    tmp_path: Path, benches: Path
+) -> None:
+    workspace = Workspace(make_repo(tmp_path / "gameplan"))
+
+    with (
+        patch.object(Bench, "initialize", autospec=True, side_effect=fake_initialize),
+        patch.object(PythonEnvManager, "install_app"),
+        patch.object(Site, "provision", side_effect=fake_provision),
+    ):
+        workspace.setup(frappe_branch="version-15")
+    with pytest.raises(BenchError, match=r"must not contain '\.\.'"):
+        Workspace(make_repo(tmp_path / "crm", name="crm")).setup(frappe_branch="bad..branch")
+
+    assert BenchConfig.read(workspace.bench.path).framework_app.branch == "version-15"
+    assert not (benches / "dev-crm" / "bench.toml").exists()
+
+
 def test_setup_resumes_an_interrupted_initialization(tmp_path: Path, benches: Path) -> None:
     workspace = Workspace(make_repo(tmp_path / "gameplan"))
 

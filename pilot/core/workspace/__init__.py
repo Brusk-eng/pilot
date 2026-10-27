@@ -177,12 +177,13 @@ class Workspace:
         def configure(config: BenchConfig) -> None:
             config.admin.enabled = False
             config.allow_developer_mode = True
-            config.framework_app.branch = frappe_branch
             config.apps.append(AppConfig(name=self.app_name, repo="", branch="", path=str(self.root)))
 
         name = self.new_bench_name()
         on_progress(f"Creating bench '{name}' ({db_type}, frappe {frappe_branch}) for {self.root}")
-        return Bench.create_at(benches_dir() / name, name, db_type=db_type, configure=configure)
+        return Bench.create_at(
+            benches_dir() / name, name, db_type=db_type, frappe_branch=frappe_branch, configure=configure
+        )
 
     def new_bench_name(self) -> str:
         slug = re.sub(r"[^a-z0-9]+", "-", self.root.name.lower()).strip("-") or "app"
