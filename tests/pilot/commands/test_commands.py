@@ -49,16 +49,15 @@ def _ensure_database_credentials(bench_dir: Path) -> None:
     BenchInitializer(Bench(bench_dir))._ensure_database_credentials()
 
 
-
 def _write_installable_app(app_dir: Path, name: str) -> None:
     """The minimum an app needs to pass validation, which every update runs."""
     (app_dir / "pyproject.toml").write_text(
-        f'[project]\nname = "{name}"\n\n'
-        '[tool.bench.frappe-dependencies]\nfrappe = ">=16.0.0,<17.0.0"\n'
+        f'[project]\nname = "{name}"\n\n[tool.bench.frappe-dependencies]\nfrappe = ">=16.0.0,<17.0.0"\n'
     )
     (app_dir / name).mkdir(exist_ok=True)
     (app_dir / name / "__init__.py").write_text("")
     (app_dir / name / "hooks.py").write_text(f"app_name = '{name}'\n")
+
 
 def test_new_command_creates_directory_and_toml(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from pilot.commands.bench.create import NewCommand
@@ -70,6 +69,44 @@ def test_new_command_creates_directory_and_toml(tmp_path: Path, monkeypatch: pyt
     assert target.is_dir()
     content = (target / "bench.toml").read_text()
     assert 'name = "my-bench"' in content
+
+
+@pytest.mark.parametrize(
+    ("options", "expected_branch"),
+    [({}, "version-16"), ({"frappe_branch": "develop"}, "develop")],
+)
+def test_new_command_persists_framework_branch(tmp_path: Path, options: dict, expected_branch: str) -> None:
+    from pilot.commands.bench.create import NewCommand
+
+    target = tmp_path / "benches" / "my-bench"
+    NewCommand(
+        target_directory=target, bench_name="my-bench", admin_password="Test-password1!", **options
+    ).run()
+
+    with (target / "bench.toml").open("rb") as f:
+        data = tomllib.load(f)
+    assert data["apps"][0] == {
+        "name": "frappe",
+        "repo": "https://github.com/frappe/frappe",
+        "branch": expected_branch,
+    }
+    assert BenchConfig.read(target).framework_app.branch == expected_branch
+
+
+@pytest.mark.parametrize("branch", ["", "-x", "a..b"])
+def test_new_command_rejects_invalid_framework_branch(tmp_path: Path, branch: str) -> None:
+    from pilot.commands.bench.create import NewCommand
+
+    target = tmp_path / "benches" / "my-bench"
+    with pytest.raises(BenchError, match=r"[Bb]ranch"):
+        NewCommand(
+            target_directory=target,
+            bench_name="my-bench",
+            admin_password="Test-password1!",
+            frappe_branch=branch,
+        ).run()
+
+    assert not target.exists()
 
 
 def test_new_command_raises_if_bench_already_exists(tmp_path: Path) -> None:
@@ -923,7 +960,9 @@ def test_bench_update_apps_uses_captured_target_for_unpinned_app(tmp_path: Path)
     publish([])
     with patch("pilot.core.app.App.update") as mock_update:
         # A captured pin is used exactly as given - never re-resolved live.
-        bench._update_apps(None, lambda message: None, {"helpdesk": RevisionPin(kind="commit", ref="deadbeef")})
+        bench._update_apps(
+            None, lambda message: None, {"helpdesk": RevisionPin(kind="commit", ref="deadbeef")}
+        )
 
     mock_update.assert_called_once_with(pin=RevisionPin(kind="commit", ref="deadbeef"))
 
@@ -1109,6 +1148,30 @@ def test_start_dev_uninitialized_runs_wizard(tmp_path: Path) -> None:
     rebuild.assert_not_called()
 
 
+@pytest.mark.parametrize("database", ["mariadb", "postgres"])
+def test_database_startup_wait_times_out_without_starting_work(tmp_path: Path, database: str) -> None:
+    from pilot.core.bench.runtime import BenchRuntime
+
+    bench = make_bench(tmp_path)
+    bench.config.production.enabled = True
+    bench.config.db_type = database
+    manager = "PostgresManager" if database == "postgres" else "MariaDBManager"
+    with patch(f"pilot.managers.database.{manager}") as manager_class:
+        manager_class.return_value.config.existing = False
+        manager_class.return_value.is_reachable.return_value = False
+        with pytest.raises(BenchError, match="database did not become ready"):
+            BenchRuntime(bench).wait_for_database(timeout_seconds=0)
+
+
+def test_database_startup_wait_skips_a_development_bench(tmp_path: Path) -> None:
+    from pilot.core.bench.runtime import BenchRuntime
+
+    bench = make_bench(tmp_path)
+    with patch("pilot.managers.database.MariaDBManager") as manager_class:
+        BenchRuntime(bench).wait_for_database(timeout_seconds=0)
+    manager_class.assert_not_called()
+
+
 def test_start_dev_initialized_stops_then_starts(tmp_path: Path) -> None:
     from pilot.core.bench.runtime import BenchRuntime
 
@@ -1213,6 +1276,7 @@ def test_write_common_site_config_preserves_custom_keys(tmp_path: Path) -> None:
     config = json.loads(config_path.read_text())
     assert config["server_script_enabled"] == 1
     assert config["redis_cache"] == "redis://localhost:13000"
+    assert config["webserver_host"] == "127.0.0.1"
 
 
 def test_write_common_site_config_does_not_enable_server_scripts(tmp_path: Path) -> None:
@@ -1490,7 +1554,9 @@ def test_new_app_reloads_workers_so_sites_can_import_it(tmp_path: Path) -> None:
     mock_reload.assert_called_once()
 
 
-def test_list_site_apps_marks_apps_the_bench_does_not_have(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+def test_list_site_apps_marks_apps_the_bench_does_not_have(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
     from pilot.commands.sites.list_apps import ListSiteAppsCommand
 
     bench = make_bench(tmp_path)

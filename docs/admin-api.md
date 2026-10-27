@@ -61,6 +61,14 @@ Task-starting endpoints should return:
 
 `GET /git/branches?repo=...` runs local `git ls-remote --heads`, so Git must be available on the Pilot host. It returns all remote branch names and puts the remote default first.
 
+### Git Connection Through Central
+
+On a Central-managed host, `GET /git/connection` also returns `central`: whether Central offers its GitHub App, and the granted repositories of each account. The host stores no GitHub token. It asks Central for a read-only token per repository and caches it in memory until about 10 minutes before expiry.
+
+- `POST /git/connection-attempts` with `{"return_url": ...}` returns the Central `url` where a user picks repositories. Central then sends the browser back to `return_url`.
+- A Central grant replaces a stored personal access token. `PUT /git/connection` answers 409 `github_app_connected` while the grant is active.
+- `DELETE /git/connection` removes the grant on Central, then the local record.
+
 ### Site Apps
 
 `GET /sites/<name>/apps` returns the apps in use on the site, disabled ones excluded, plus `can_disable` for whether this bench's Frappe supports disabling at all. Each app has `is_marketplace` when its repository is the one the registry lists; the registry's links and metadata apply only then, so a fork keeps its own. An app the site lists but the bench does not have, for example after a restore from another bench, has `missing: true`. Uninstalling such an app removes it from the site's installed apps only.
@@ -82,7 +90,7 @@ Every `/sites/<name>/...` route accepts the site's directory name or any hostnam
 
 `GET /sites/<name>/domains` returns one row for each hostname. Each row has `domain`, `is_site`, `is_primary`, `public_scheme`, and `tls`. For a hostname that this host serves directly, `tls` is true only when the certificate covers it. The response also has `certificate_email_required`: true when the site uses TLS, the bench is in production, and no Let's Encrypt email is set. It also has `certificate_pending`: true while a `setup-letsencrypt` task for the bench is queued or running. The Admin shows "Certificate pending" on rows without TLS and reads the list again until it is false.
 
-`POST /sites/<name>/domains` takes `{"domain": "..."}` and an optional `email`. The email is saved as the Let's Encrypt account email before certificates are issued; an invalid one returns `422` with `{"needs_email": true}`. Without any email, the domain is attached and served over HTTP until an email is set.
+`POST /sites/<name>/domains` takes `{"domain": "..."}` and optional `email` and `primary` fields. Set `primary` to `true` to attach the domain and make it primary without moving the site directory. Repeating that request reuses the attached domain and queues configuration again. The email is saved as the Let's Encrypt account email before certificates are issued; an invalid one returns `422` with `{"needs_email": true}`. Without any email, the domain is attached and served over HTTP until an email is set.
 
 `POST /sites/<name>/login` returns `{"url": ...}` plus an optional `hint` when the URL's host does not resolve on the server - the UI surfaces it so the user knows to add a hosts entry or use a `*.localhost` name.
 
@@ -97,10 +105,17 @@ A site calls Central through `GET` or `POST /sites/<name>/central/<method>`. Pil
 | `central.api.pilot.heartbeat` | Check that the site reaches Central |
 | `central.api.pilot.get_team_identity_token` | Get a 5-minute token that proves the team to an outside service. Send `{"audience": "<service URL>"}`; the answer is `{"token": "..."}`. |
 | `central.billing.api.billing_api.*` | Billing calls from the site's Cloud Settings |
+| `central.api.email_oauth.get_active_providers` | List the providers a mailbox can connect with through Frappe Cloud right now. `POST` with no body; the answer is a list of provider keys, such as `["microsoft"]`. |
+| `central.api.email_oauth.start` | Start connecting a mailbox through Frappe Cloud's OAuth app. `POST` `{"provider", "state", "code_challenge", "return_url"}`; the answer is `{"authorize_url", "client_id", "scopes"}`. |
+| `central.api.email_oauth.relay_token` | Exchange a mailbox's sign-in code or refresh token at the provider with Frappe Cloud's app secret. `POST` `{"provider", "grant_type", ...}`; the answer is the provider's token response. |
+
+The provider sends the browser to Central's `central.api.email_oauth.callback` directly, not through Pilot, and Central sends it back to the site's `return_url`.
 
 ### Renaming And Domains
 
-`POST /sites/<name>/actions/rename` takes `{"new_name": "...", "keep_old_hostname": true}` and queues `rename-site`. The new name is validated the same way a new site's is, and both names are claimed as task resources so nothing can create or drop either while the site is moving between them. `keep_old_hostname` defaults to true and keeps the old hostname on the site, so open tabs and existing links keep working; pass false to release a pooled name a fleet reuses. `make_primary` defaults to false. Pass true to make the new name the site's `host_name`, so the links the site builds use it and its other domains redirect to it. A rename also replaces the site's `pilot_auth_token` with one scoped to the new name. See [Renaming without downtime](commands.md#renaming-without-downtime).
+`POST /sites/<name>/actions/rename` takes `{"new_name": "...", "keep_old_hostname": true}` and queues `rename-site`. The new name is validated the same way a new site's is, and both names are claimed as task resources so nothing can create or drop either while the site is moving between them. `keep_old_hostname` defaults to true and keeps the old hostname on the site, so open tabs and existing links keep working; pass false to release a pooled name a fleet reuses. `make_primary` defaults to false. Pass true to make the new name the site's `host_name`, so the links the site builds use it and its other domains redirect to it. The Central VM hostname of the site (`site-*`) also redirects to it, except `/api/method/ping`, which Central probes for readiness. A rename also replaces the site's `pilot_auth_token` with one scoped to the new name. See [Renaming without downtime](commands.md#renaming-without-downtime).
+
+`PATCH /settings` takes `{"letsencrypt": {"email": "ops@example.com"}}` to set the Let's Encrypt account email in `bench.toml`. An invalid address gets a 422 `invalid_settings`. It does not issue certificates.
 
 `POST /settings/admin-domain` takes `{"domain": "...", "tls": true|false}` (`tls` optional) and queues `change-admin-domain`, which registers the route with the domain provider, writes `bench.toml`, reissues the certificate when TLS is on, and republishes nginx. The previous hostname is released only once the switch has committed.
 
@@ -133,11 +148,13 @@ A remote source needs a bench session and an `https://` site. The Administrator 
 
 `POST /sites/<name>/actions/restore-upload` takes the same `parts` and `skip_failing_patches` (`"true"`) as multipart form fields, plus the files `database`, `public`, `private`, and `config` (the site config backup). nginx `client_max_body_size` limits the upload size.
 
-A restore puts the site in maintenance mode, restores only the chosen parts, and migrates it. It restores the files before the database. From a remote site or Frappe Cloud, the file archives and a MariaDB database stream into the site as they download, so they need no copy on disk. The site stays in maintenance mode for the download time. `skip_failing_patches` passes `--skip-failing` to the migration. It takes no backup of the site first. A database from another site brings that site's encryption key. The `config` part merges the source site config into this site, except the keys that belong to this site: `db_*`, `redis_*`, `pilot_*`, `atlas_*`, `rds_db`, `maintenance_mode`, `pause_scheduler`, `email_sender_name`, and the keys a site-scoped config change cannot set either, such as `host_name`, `domains`, `route`, `ssl`, `cert_name`, `backup_retention`, and `installed_apps`. A config restored without its database keeps this site's `encryption_key`, so the passwords in this site's database stay readable. If a step fails, the site stays in maintenance mode. Restoring from another site needs a bench session; a site token can only restore its own backups.
+A restore puts the site in maintenance mode, restores only the chosen parts, and migrates it. It restores the files before the database. From a remote site or Frappe Cloud, the file archives and a MariaDB database stream into the site as they download, so they need no copy on disk. The site stays in maintenance mode for the download time. `skip_failing_patches` passes `--skip-failing` to the migration. It takes no backup of the site first. A database from another site brings that site's encryption key. The `config` part merges the source site config into this site, except the keys that belong to this site: `db_*`, `redis_*`, `pilot_*`, `atlas_*`, `rds_db`, `maintenance_mode`, `pause_scheduler`, `email_sender_name`, and the keys a site-scoped config change cannot set either, such as `host_name`, `domains`, `route`, `ssl`, `cert_name`, `backup_retention`, `installed_apps`, `cloud_server_url`, and `cloud_settings_embed_url`. A config restored without its database keeps this site's `encryption_key`, so the passwords in this site's database stay readable. If a step fails, the site stays in maintenance mode. Restoring from another site needs a bench session; a site token can only restore its own backups.
 
 #### Chunked uploads
 
 The dashboard sends large backup files in chunks of up to 256 MB, because one request cannot carry them. The routes take a bench session, or a site token for its own site.
+
+On a server that Central locks, such as an open free trial, a site token cannot change the site configuration (`PATCH /sites/<name>/configuration`) or download the site config file of a backup. Pilot asks Central (`central.api.pilot.get_server_access`) on each such request. A locked server answers 403 `upgrade_required`. When Central does not answer, or a server that Central manages cannot read its credential, Pilot answers 503 `central_unavailable`. The download links of an offsite backup leave out the config file. A bench session and a server without Central are never locked.
 
 | Route | Purpose |
 |---|---|
@@ -178,6 +195,12 @@ A user of the team opens `approval_url` and enters the code within 10 minutes. F
 The first three sections come from MariaDB's Performance Schema, so they are empty and the flag is `false` whenever `performance_schema` is off - the instrumentation is a startup setting, and MariaDB collects nothing until the server restarts with it on. `redundant_indexes` reads `information_schema.STATISTICS` instead and stays populated either way. The UI keys off the flag to explain the empty panels rather than reporting them as an error.
 
 `?site=<name>` narrows every section to that site's schema; without it the report covers every user schema on the server, system schemas excluded. Only MariaDB implements it - other engines raise, and the route answers 422.
+
+### Live Metrics
+
+`GET /metrics` returns the host's current CPU, load, memory, and root disk readings from `psutil`, plus network and disk I/O rates measured as the delta since the previous call. The Analytics live view polls it every 10 seconds for its top bar and live charts, so it must stay cheap: no `du`, no database queries, nothing that can fail on file permissions. Directory and database sizes belong to `GET /storage` and `GET /sites/storage`.
+
+The live view loads `/metrics` and `/monitor/history` independently. If `/metrics` fails, the top bar shows the error and the application charts still refresh from `/monitor/history`.
 
 ### Setup
 

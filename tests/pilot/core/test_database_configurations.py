@@ -97,6 +97,22 @@ def _manager(values: dict[str, str] | None = None) -> Mock:
     return manager
 
 
+@pytest.mark.parametrize("name", ["MemoryHigh", "MemoryMax"])
+@pytest.mark.parametrize("method", ["prepare_change", "set"])
+def test_computed_memory_limits_cannot_be_changed(name, method) -> None:
+    manager = _manager()
+    with pytest.raises(DatabaseError, match="Pilot computes this limit"):
+        getattr(DatabaseConfigurations(_config(), manager), method)(name, 4500)
+    manager.memory.set.assert_not_called()
+
+
+def test_service_memory_limits_are_not_in_configuration_snapshot() -> None:
+    with patch(f"{MODULE}.is_linux", return_value=True):
+        snapshot = DatabaseConfigurations(_config(), _manager()).snapshot()
+    assert snapshot["readable"] is True
+    assert not {"MemoryHigh", "MemoryMax"} & {item["name"] for item in snapshot["variables"]}
+
+
 def test_catalog_covers_press_variables_and_pilot_mariadb_118_controls() -> None:
     assert len(MARIADB_VARIABLE_NAMES) == 51
     assert len(MARIADB_VARIABLE_NAMES) == len(MARIADB_VARIABLE_SPECS)
@@ -118,6 +134,7 @@ def test_catalog_covers_press_variables_and_pilot_mariadb_118_controls() -> None
         "innodb_old_blocks_pct",
         "innodb_old_blocks_time",
         "innodb_print_all_deadlocks",
+        "innodb_snapshot_isolation",
         "innodb_stats_persistent_sample_pages",
         "max_connections",
         "net_read_timeout",
@@ -200,6 +217,30 @@ def test_snapshot_exposes_generic_and_guarded_action_variables_as_editable() -> 
     assert requested == MARIADB_VARIABLE_NAMES
 
 
+def test_buffer_pool_editor_and_submission_use_the_effective_hard_limit() -> None:
+    config = _config()
+    service = MariaDBManager(config.mariadb)
+    manager = _manager(
+        {
+            "innodb_buffer_pool_size": str(768 * 1024 * 1024),
+            "innodb_buffer_pool_size_max": str(2048 * 1024 * 1024),
+        }
+    )
+    manager.variable_limits.side_effect = service.variable_limits
+    configurations = DatabaseConfigurations(config, manager)
+    with (
+        patch(f"{MODULE}.is_linux", return_value=True),
+        patch("pilot.core.database.quick_actions.is_linux", return_value=True),
+        patch("pilot.managers.database.mariadb.is_macos", return_value=False),
+        patch.object(service, "_total_memory_mb", return_value=8192),
+        patch.object(service, "_unit_memory_mb", return_value=1024),
+    ):
+        rows = {row["name"]: row for row in configurations.snapshot()["variables"]}
+        assert rows["innodb_buffer_pool_size"]["edit"]["max"] == 1023
+        with pytest.raises(ValueError, match="1023"):
+            configurations.prepare_change("innodb_buffer_pool_size", 1024)
+
+
 def test_buffer_pool_editor_requires_the_mariadb_118_live_ceiling() -> None:
     manager = _manager({"innodb_buffer_pool_size": str(128 * 1024 * 1024)})
 
@@ -210,6 +251,17 @@ def test_buffer_pool_editor_requires_the_mariadb_118_live_ceiling() -> None:
     assert row["editable"] is False
     assert row["edit"] is None
     assert "does not expose the live Buffer Pool ceiling" in row["reason"]
+
+
+def test_edits_do_not_depend_on_bench_management() -> None:
+    manager = _manager({"connect_timeout": "10", "max_connections": "50"})
+    with patch(f"{MODULE}.is_linux", return_value=True):
+        result = DatabaseConfigurations(_config(allow_management=False), manager).snapshot()
+
+    rows = {row["name"]: row for row in result["variables"]}
+    assert result["editable"] is True
+    assert rows["connect_timeout"]["editable"] is True
+    assert rows["max_connections"]["editable"] is True
 
 
 def test_external_mariadb_values_are_readable_but_all_edits_are_disabled() -> None:

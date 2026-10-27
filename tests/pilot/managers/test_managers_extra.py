@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import contextlib
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
+
+import pytest
 
 from pilot.config import AppConfig, BenchConfig, MariaDBConfig, RedisConfig, WorkerConfig, WorkerGroup
 from pilot.core.bench import Bench
+from pilot.exceptions import CommandError, ConfigError
 from pilot.managers.processes.systemd import _ADMIN_IDLE_TIMEOUT
 from pilot.managers.redis import RedisManager
 
@@ -62,6 +65,44 @@ def test_redis_manager_cache_config_has_no_save(tmp_path: Path) -> None:
 
     cache = (bench.config_path / "redis_cache.conf").read_text()
     assert 'save ""' in cache
+
+
+def test_redis_manager_keeps_lines_outside_its_block(tmp_path: Path) -> None:
+    bench = make_bench(tmp_path)
+    RedisManager(RedisConfig(cache_port=13000, queue_port=11000), bench).generate_configs()
+    path = bench.config_path / "redis_cache.conf"
+    path.write_text("# mine\n" + path.read_text() + "loadmodule /opt/redisearch.so\n")
+
+    RedisManager(RedisConfig(cache_port=14000, queue_port=11000), bench).generate_configs()
+
+    lines = path.read_text().splitlines()
+    assert lines[0] == "# mine"
+    assert lines[-1] == "loadmodule /opt/redisearch.so"
+    assert "port 14000" in lines
+    assert "port 13000" not in lines
+
+
+def test_redis_manager_upgrades_a_config_without_its_block(tmp_path: Path) -> None:
+    bench = make_bench(tmp_path)
+    path = bench.config_path / "redis_cache.conf"
+    path.write_text('port 13000\nbind 127.0.0.1\nsave ""\nloadmodule /opt/redisearch.so\n')
+
+    RedisManager(RedisConfig(cache_port=13000, queue_port=11000), bench).generate_configs()
+
+    lines = path.read_text().splitlines()
+    assert lines.count("port 13000") == 1
+    assert lines[-1] == "loadmodule /opt/redisearch.so"
+
+
+def test_redis_manager_rejects_a_block_without_its_end(tmp_path: Path) -> None:
+    bench = make_bench(tmp_path)
+    manager = RedisManager(RedisConfig(cache_port=13000, queue_port=11000), bench)
+    manager.generate_configs()
+    path = bench.config_path / "redis_cache.conf"
+    path.write_text(path.read_text().replace("# END PILOT MANAGED BLOCK", ""))
+
+    with pytest.raises(ConfigError):
+        manager.generate_configs()
 
 
 def test_redis_manager_brew_package_with_version() -> None:
@@ -376,8 +417,8 @@ def test_systemd_unit_renders_env_vars(tmp_path: Path) -> None:
         env={"PYTHONPATH": "/cli", "FOO": "bar"},
     )
     unit = SystemdRenderer("test-bench").render(pd)
-    assert "Environment=PYTHONPATH=/cli" in unit
-    assert "Environment=FOO=bar" in unit
+    assert 'Environment="PYTHONPATH=/cli"' in unit
+    assert 'Environment="FOO=bar"' in unit
     assert "ExecStart=/env/bin/python" in unit
 
 
@@ -417,15 +458,28 @@ def test_systemd_workload_stops_before_redis(tmp_path: Path) -> None:
 
 
 def test_supervisor_redis_starts_first_and_stops_last(tmp_path: Path) -> None:
-    from pilot.managers.processes.local import ProcessDefinition
-    from pilot.managers.processes.supervisor import SupervisorRenderer
+    """A group signals all its programs at once, so redis lives in a group stopped after the workload."""
+    from pilot.managers.processes.base import UnitGroup
+    from pilot.managers.processes.supervisor import SupervisorProcessManager
 
-    renderer = SupervisorRenderer("test-bench", tmp_path)
-    redis = renderer.render(ProcessDefinition(name="redis_queue", argv=["redis"], log_file=tmp_path / "r.log"))
-    web = renderer.render(ProcessDefinition(name="web", argv=["web"], log_file=tmp_path / "web.log"))
+    mgr = _make_supervisor_manager(tmp_path)
+    with (
+        patch.object(mgr, "is_alive", return_value=True),
+        patch.object(
+            SupervisorProcessManager,
+            "loaded_groups",
+            new_callable=PropertyMock,
+            return_value={"test-bench", "test-bench-apps", "test-bench-redis"},
+        ),
+        patch("pilot.managers.processes.supervisor.run_command") as run,
+    ):
+        mgr.apply_unit_action("restart", UnitGroup.WORKLOAD)
 
-    assert "priority=100" in redis
-    assert "priority" not in web
+    commands = [call.args[0][3:] for call in run.call_args_list]
+    assert commands == [
+        ["stop", "test-bench:*", "test-bench-apps:*", "test-bench-redis:*"],
+        ["start", "test-bench-redis:*", "test-bench-apps:*", "test-bench:*"],
+    ]
 
 
 def test_systemd_unit_redis_gets_stop_timeout(tmp_path: Path) -> None:
@@ -436,6 +490,17 @@ def test_systemd_unit_redis_gets_stop_timeout(tmp_path: Path) -> None:
     pd = ProcessDefinition("redis_cache", ["redis-server", "x.conf"], tmp_path / "r.log", stop_timeout=300)
     unit = SystemdRenderer("test-bench").render(pd)
     assert "TimeoutStopSec=300" in unit
+
+
+def test_systemd_stops_only_the_worker_pool_process(tmp_path: Path) -> None:
+    """RQ's job process dies on SIGTERM, so systemd must signal only the pool, which drains its workers."""
+    from pilot.managers.processes.local import ProcessDefinition
+    from pilot.managers.processes.systemd import SystemdRenderer
+
+    pool = ProcessDefinition("worker_pool", ["python"], tmp_path / "w.log", stop_main_process_only=True)
+    web = ProcessDefinition("web", ["gunicorn"], tmp_path / "web.log")
+    assert "KillMode=mixed" in SystemdRenderer("test-bench").render(pool)
+    assert "KillMode" not in SystemdRenderer("test-bench").render(web)
 
 
 def test_systemd_unit_raises_descriptor_limit(tmp_path: Path) -> None:
@@ -472,6 +537,53 @@ def test_systemd_generate_config_writes_unit_files(tmp_path: Path) -> None:
     assert (mgr.systemd_conf_dir / "test-bench.target").exists()
 
 
+def test_systemd_write_config_flushes_units_to_disk(tmp_path: Path) -> None:
+    from pilot.managers.processes.local import ProcessDefinition
+
+    mgr = _make_systemd_manager(tmp_path)
+    mgr.systemd_conf_dir.mkdir(parents=True, exist_ok=True)
+    fake_defs = [ProcessDefinition("web", ["/env/bin/python", "serve"], tmp_path / "logs" / "web.log")]
+    flushed = []
+    with (
+        patch("pilot.managers.environment.AdminEnvManager"),
+        patch.object(mgr, "_prod_process_definitions", return_value=fake_defs),
+        patch("pilot.managers.processes.systemd.fsync_directory_files", side_effect=flushed.append),
+    ):
+        mgr.write_config()
+    assert flushed == [mgr.systemd_conf_dir]
+
+
+def test_fsync_directory_files_flushes_each_file(tmp_path: Path) -> None:
+    from pilot.internal.atomic_file import fsync_directory_files
+
+    (tmp_path / "a.service").write_text("a")
+    (tmp_path / "b.target").write_text("b")
+    (tmp_path / "link.service").symlink_to(tmp_path / "a.service")
+    with patch("pilot.internal.atomic_file.os.fsync") as fsync:
+        fsync_directory_files(tmp_path)
+    assert fsync.call_count == 3
+
+
+def test_systemd_write_config_keeps_units_when_a_declaration_is_broken(tmp_path: Path) -> None:
+    import pytest
+
+    from pilot.exceptions import BenchError
+
+    mgr = _make_systemd_manager(tmp_path)
+    mgr.systemd_conf_dir.mkdir(parents=True, exist_ok=True)
+    existing = mgr.systemd_conf_dir / "test-bench-mail-stalwart.service"
+    existing.write_text("[Service]\nExecStart=/usr/bin/stalwart\n")
+
+    with (
+        patch("pilot.managers.processes.systemd.AdminEnvManager"),
+        patch.object(mgr, "_prod_process_definitions", side_effect=BenchError("broken app")),
+        pytest.raises(BenchError),
+    ):
+        mgr.write_config()
+
+    assert existing.exists()
+
+
 def test_systemd_admin_socket_listens_on_internal_port(tmp_path: Path) -> None:
     from pilot.managers.processes.systemd import SystemdRenderer
 
@@ -489,7 +601,7 @@ def test_systemd_admin_service_runs_gunicorn_with_idle_timeout(tmp_path: Path) -
     assert "admin.backend.wsgi:application" in service
     # The value must outlive an image builder's pre-snapshot window, so assert the
     # constant reaches the unit rather than pinning a number here.
-    assert f"Environment=BENCH_ADMIN_IDLE_TIMEOUT={_ADMIN_IDLE_TIMEOUT}" in service
+    assert f'Environment="BENCH_ADMIN_IDLE_TIMEOUT={_ADMIN_IDLE_TIMEOUT}"' in service
     assert _ADMIN_IDLE_TIMEOUT >= 600
     assert "Requires=test-bench-admin.socket" in service
     assert "After=test-bench-admin.socket" in service
@@ -653,12 +765,13 @@ class _FakeProcessManager:
         self.prepared = 0
         self.generated = 0
         self._is_running = True
+        self.is_realtime_stale = False
 
         fake = self
 
         class _Impl(ManagedProcessManager):
             def __init__(self) -> None:
-                pass  # skip Bench wiring; the primitives below are pure recorders
+                self.bench = MagicMock()  # skip Bench wiring; the primitives below are pure recorders
 
             def write_config(self_impl) -> None:
                 fake.generated += 1
@@ -677,6 +790,20 @@ class _FakeProcessManager:
 
             def are_units_running(self_impl, role) -> bool:
                 return fake._is_running
+
+            def _is_realtime_stale(self_impl, definitions) -> bool:
+                return fake.is_realtime_stale
+
+            def restart_processes(self_impl, definitions) -> None:
+                fake.calls.append(("restart", [definition.name for definition in definitions]))
+
+            @property
+            def process_definitions(self_impl):
+                from pilot.managers.processes.definitions import ProcessDefinition
+
+                names = [("web", None), ("socketio", None), ("worker_pool", None), ("redis_cache", None)]
+                names += [("admin", None), ("mail-stalwart", "mail")]
+                return [ProcessDefinition(name, ["x"], Path("/tmp/x.log"), app=app) for name, app in names]
 
             def _clear_frappe_cache(self_impl) -> None:
                 pass
@@ -721,19 +848,38 @@ def test_supervised_stop_admin_targets_admin_only() -> None:
 
 
 def test_supervised_reload_workers_web_only_restarts_web() -> None:
-    from pilot.managers.processes.base import UnitGroup
-
     fake = _FakeProcessManager()
     fake.manager.reload_workers(web_only=True)
-    assert fake.calls == [("restart", UnitGroup.WEB)]
+    assert fake.calls == [("restart", ["web"])]
 
 
-def test_supervised_reload_workers_full_restarts_workload() -> None:
-    from pilot.managers.processes.base import UnitGroup
-
+def test_supervised_reload_workers_keeps_socketio_redis_and_admin_running() -> None:
     fake = _FakeProcessManager()
-    fake.manager.reload_workers(web_only=False)
-    assert fake.calls == [("restart", UnitGroup.WORKLOAD)]
+    fake.manager.reload_workers()
+    assert fake.calls == [("restart", ["web", "worker_pool", "mail-stalwart"])]
+
+
+def test_supervised_reload_workers_restarts_socketio_when_realtime_changed() -> None:
+    fake = _FakeProcessManager()
+    fake.is_realtime_stale = True
+    fake.manager.reload_workers()
+    assert fake.calls == [("restart", ["web", "socketio", "worker_pool", "mail-stalwart"])]
+
+
+def test_reload_saves_realtime_folders_only_after_a_successful_restart() -> None:
+    fake = _FakeProcessManager()
+    fake.is_realtime_stale = True
+    fake.manager.reload_workers()
+    fake.manager.bench.processes.save_realtime_folders.assert_called_once_with()
+
+    failing = _FakeProcessManager()
+    failing.is_realtime_stale = True
+    with (
+        patch.object(type(failing.manager), "restart_processes", side_effect=CommandError("restart failed")),
+        pytest.raises(CommandError),
+    ):
+        failing.manager.reload_workers()
+    failing.manager.bench.processes.save_realtime_folders.assert_not_called()
 
 
 def test_supervised_reload_workers_noop_when_not_running() -> None:

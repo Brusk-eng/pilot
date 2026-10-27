@@ -36,6 +36,17 @@ export interface BillingTrial {
   days_left: number
   /** When an ended trial's server is deleted. */
   deletes_on: string | null
+  /** The team has a payment method, but the plan is above its spending limit, so the trial stays open. */
+  held?: boolean
+  /** The plan the site converts to, at the rate its subscription charges. */
+  plan?: BillingTrialPlan | null
+}
+
+export interface BillingTrialPlan {
+  title: string
+  /** Null until the team has a billing currency. */
+  monthly_rate: number | null
+  currency: string | null
 }
 
 export interface PlanOption {
@@ -55,6 +66,13 @@ export interface PlanOptions {
   sufficient: boolean
 }
 
+/** A queued plan change. `progress_url` is the page that follows it while the site restarts. */
+export interface PlanChange {
+  queued: boolean
+  resized: boolean
+  progress_url: string | null
+}
+
 export interface BillingProfile {
   currency: string
   legal_name: string
@@ -66,6 +84,10 @@ export interface BillingProfile {
   pincode: string
   gstin: string
   supported_currencies?: (string | { label: string; value: string })[]
+  /** Country names the address form picks from. */
+  countries?: string[]
+  /** India's GST state names, the only state list Central checks. */
+  india_states?: string[]
 }
 
 export interface PaymentGateway {
@@ -101,6 +123,13 @@ export interface MarketplaceApp {
   installed_version: string
   latest_version: string
   has_update: boolean
+  repo?: string
+  documentation?: string
+  website?: string
+  dependencies?: string[]
+  nightly?: boolean
+  frappe_version?: string
+  categories?: string[]
 }
 
 export interface Marketplace {

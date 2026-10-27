@@ -1,17 +1,25 @@
 from __future__ import annotations
 
 import re
+import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pilot.core.app.node_packages import NodePackages
+from pilot.exceptions import BenchError
 from pilot.managers.environment import AdminEnvManager
 from pilot.utils import cli_root
 
 if TYPE_CHECKING:
     from pilot.core.app import App
     from pilot.core.bench import Bench
+
+
+@dataclass(frozen=True)
+class ProcessState:
+    state: str  # the manager's own word, such as RUNNING or active (running)
+    pid: int | None = None
 
 
 @dataclass
@@ -23,7 +31,54 @@ class ProcessDefinition:
     working_dir: Path | None = None  # was `cd {dir} &&`
     stop_timeout: int | None = None  # graceful-stop seconds (redis=300)
     critical: bool = True  # dev runner stops the whole bench when this process exits
+    app: str | None = None  # the app that declares it; None for the bench's own processes
     socket_file: Path | None = None  # removed before each start; a stale one blocks listen()
+    listen_address: str | None = None  # systemd holds it, so a restart queues requests instead of refusing them
+    restart_on_failure: bool = True
+    stop_main_process_only: bool = False  # it stops its own children; a signal to them too kills their jobs
+    pre_run: list[str] = field(default_factory=list)
+    post_run: list[str] = field(default_factory=list)
+
+    @property
+    def argv_with_hooks(self) -> list[str]:
+        """argv that runs pre_run and post_run around the process, for managers without native hooks."""
+        if not self.pre_run and not self.post_run:
+            return self.argv
+
+        if not self.post_run:
+            return ["sh", "-c", f"{shlex.join(self.pre_run)} || exit; exec {shlex.join(self.argv)}"]
+
+        # One line: supervisord's command= cannot hold a newline.
+        # A TERM during pre_run skips the process; one during it ends the first wait early,
+        # so wait again before post_run.
+        pre_run = f"{shlex.join(self.pre_run)} || status=$?; " if self.pre_run else ""
+        run = (
+            f"{shlex.join(self.argv)} & child=$!; "
+            'wait "$child"; status=$?; '
+            'kill -0 "$child" 2>/dev/null && { wait "$child"; status=$?; }'
+        )
+        script = (
+            "status=0; stopped=0; child=; "
+            "trap 'stopped=1; [ -n \"$child\" ] && kill -TERM \"$child\" 2>/dev/null' TERM; "
+            f'{pre_run}if [ "$status" -eq 0 ] && [ "$stopped" -eq 0 ]; then {run}; fi; '
+            f'{shlex.join(self.post_run)}; exit "$status"'
+        )
+        return ["sh", "-c", script]
+
+
+def queue_slug(queues: str) -> str:
+    """Commas in queue names break supervisor's programs= list; slug them."""
+    return re.sub(r"[^A-Za-z0-9]+", "_", queues).strip("_") or "default"
+
+
+def check_unique_names(definitions: list[ProcessDefinition]) -> None:
+    """Supervisor writes `_` as `-`, so two names that differ only there would share a program."""
+    seen: dict[str, ProcessDefinition] = {}
+    for definition in definitions:
+        other = seen.setdefault(definition.name.replace("_", "-"), definition)
+        if other is not definition:
+            owner = f"app '{definition.app}'" if definition.app else "the bench"
+            raise BenchError(f"Process '{definition.name}' of {owner} has the same name as '{other.name}'.")
 
 
 class ProcessDefinitionBuilder:
@@ -33,34 +88,50 @@ class ProcessDefinitionBuilder:
         self.watch_admin_js = watch_admin_js
 
     def prod_process_definitions(self) -> list[ProcessDefinition]:
+        defs = [
+            *self.workload_definitions(),
+            self.redis_definition("redis_cache", "redis_cache.conf"),
+            self.redis_definition("redis_queue", "redis_queue.conf"),
+        ]
+        if self.bench.config.production.process_manager == "systemd":
+            self.wait_for_database_before_web(defs)
+        defs.extend(self.bench.processes.get_app_definitions())
+        check_unique_names(defs)
+        return defs
+
+    def workload_definitions(self) -> list[ProcessDefinition]:
         if self.bench.is_lite_mode:
             # web, realtime and jobs all live in the one lite process.
-            defs = [self.web_definition(), self.admin_definition()]
-        elif self.bench.config.production.process_manager == "systemd":
-            all_queues = ",".join(q for group in self.bench.config.workers.groups for q in group.queues)
-            num_workers = sum(group.count for group in self.bench.config.workers.groups)
-            defs = [
+            return [self.web_definition(), self.admin_definition()]
+        if self.bench.config.production.process_manager == "systemd":
+            return [
                 self.web_definition(),
                 self.socketio_definition(),
                 self.admin_definition(),
-                self.worker_pool_definition(all_queues, num_workers),
+                *self.worker_pool_definitions(),
             ]
-        else:
-            worker_defs = [
-                pd
-                for group in self.bench.config.workers.groups
-                for pd in self.worker_definitions(",".join(group.queues), group.count)
-            ]
-            defs = [
-                self.web_definition(),
-                self.socketio_definition(),
-                self.admin_definition(),
-                *worker_defs,
-                self.schedule_definition(),
-            ]
-        defs.append(self.redis_definition("redis_cache", "redis_cache.conf"))
-        defs.append(self.redis_definition("redis_queue", "redis_queue.conf"))
-        return defs
+        worker_defs = [
+            pd
+            for group in self.bench.config.workers.groups
+            for pd in self.worker_definitions(",".join(group.queues), group.count)
+        ]
+        return [
+            self.web_definition(),
+            self.socketio_definition(),
+            self.admin_definition(),
+            *worker_defs,
+            self.schedule_definition(),
+        ]
+
+    def wait_for_database_before_web(self, defs: list[ProcessDefinition]) -> None:
+        web = next(pd for pd in defs if pd.name == "web")
+        web.pre_run = [
+            str(AdminEnvManager(cli_root()).python),
+            str(cli_root() / "bin" / "pilot"),
+            "-b",
+            str(self.bench.path),
+            "wait-for-database",
+        ]
 
     def process_definitions(self) -> list[ProcessDefinition]:
         """The dev runner's processes. With the Admin disabled, neither the Admin nor its
@@ -109,7 +180,8 @@ class ProcessDefinitionBuilder:
             return self.socketio_definition(dev=True)
         return pd
 
-    def python_env(self) -> dict:
+    @staticmethod
+    def python_env() -> dict:
         """Shared env for Python processes. PYTHONUNBUFFERED keeps stdout unbuffered:
         every runner captures it into a pipe or log file, where Python would otherwise
         block-buffer app-code print() until ~8KB accumulates."""
@@ -146,6 +218,8 @@ class ProcessDefinitionBuilder:
             log_file=self.bench.logs_path / "web.log",
             env=self.python_env(),
             working_dir=sites,
+            # gunicorn takes systemd's socket when given one, and binds this address itself otherwise.
+            listen_address=f"127.0.0.1:{self.bench.config.http_port}",
         )
 
     def lite_definition(self, dev: bool = False) -> ProcessDefinition:
@@ -177,6 +251,11 @@ class ProcessDefinitionBuilder:
             env={**self.python_env(), "MALLOC_ARENA_MAX": "2", "FRAPPE_PRELOAD_MODULES": "0"},
             working_dir=self.bench.sites_path,
             stop_timeout=lite_mode.stop_timeout,
+            listen_address=(
+                f"127.0.0.1:{self.bench.config.http_port}"
+                if not dev and self.bench.has_runner_socket_support
+                else None
+            ),
         )
 
     def socketio_definition(self, dev: bool = False) -> ProcessDefinition:
@@ -210,9 +289,22 @@ class ProcessDefinitionBuilder:
             critical=False,
         )
 
-    def worker_pool_definition(self, queues: str, num_workers: int) -> ProcessDefinition:
+    def worker_pool_definitions(self) -> list[ProcessDefinition]:
+        """Combine identical queue groups; keep `worker_pool` for a single pool."""
+        counts: dict[str, int] = {}
+        for group in self.bench.config.workers.groups:
+            queues = ",".join(group.queues)
+            counts[queues] = counts.get(queues, 0) + group.count
+        return [
+            self.worker_pool_definition(
+                "worker_pool" if len(counts) == 1 else f"worker_pool_{queue_slug(queues)}", queues, count
+            )
+            for queues, count in counts.items()
+        ]
+
+    def worker_pool_definition(self, name: str, queues: str, num_workers: int) -> ProcessDefinition:
         return ProcessDefinition(
-            name="worker_pool",
+            name=name,
             argv=[
                 str(self.python),
                 "-m",
@@ -224,15 +316,15 @@ class ProcessDefinitionBuilder:
                 "--queue",
                 queues,
             ],
-            log_file=self.bench.logs_path / "worker_pool.log",
+            log_file=self.bench.logs_path / f"{name}.log",
             env=self.python_env(),
             working_dir=self.bench.sites_path,
+            stop_main_process_only=True,
         )
 
     def worker_definitions(self, queue: str, count: int) -> list[ProcessDefinition]:
         sites = self.bench.sites_path
-        # Commas in queue names break supervisor's programs= list; slug them.
-        slug = re.sub(r"[^A-Za-z0-9]+", "_", queue).strip("_") or "default"
+        slug = queue_slug(queue)
         return [
             ProcessDefinition(
                 name=f"worker_{slug}_{i}",

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import shutil
 from collections.abc import Callable
 from typing import TYPE_CHECKING
@@ -17,17 +16,23 @@ _BENCH_DIRS = ("apps", "sites", "logs", "config", "pids", "env", "admin")
 class BenchInitializer:
     """Initializes a fresh bench and rolls back partial setup on failure."""
 
-    def __init__(self, bench: "Bench") -> None:
+    def __init__(self, bench: "Bench", commit: str = "") -> None:
         self.bench = bench
+        self.commit = commit
         self._rollback_actions: list[tuple[str, Callable[[], None]]] = []
+        self._created_directories: list[str] = []
 
     def run(self, on_progress: Callable[[str], None] = lambda message: None) -> None:
+        marker = self.bench.path / ".initializing"
+        if not self.bench.is_initialized:
+            marker.touch(mode=0o600)
         try:
             self._run_steps(on_progress)
         except Exception as exc:
             on_progress(f"\nError: {exc}")
             self._rollback(on_progress)
             raise
+        marker.unlink(missing_ok=True)
 
     def _run_steps(self, on_progress: Callable[[str], None]) -> None:
         from pilot.managers.environment import PythonEnvManager
@@ -52,6 +57,7 @@ class BenchInitializer:
             ),
             ("Install Node.js", python_env_manager.install_node),
             ("Install Node.js dependencies", python_env_manager.install_node_dependencies),
+            ("Build framework assets", lambda: self._build_framework_assets(python_env_manager)),
             ("Configure Redis", self._configure_redis),
             ("Prepare admin frontend", lambda: self._ensure_admin_frontend(on_progress)),
             ("Generate process config", self._generate_process_config),
@@ -74,18 +80,23 @@ class BenchInitializer:
                 on_progress(f"    Warning: rollback step failed - {e}")
         on_progress("\nRollback complete. bench.toml is preserved - fix the issue and run init again.")
 
-    def _remove_bench_dirs(self, names: list[str]) -> None:
-        for name in names:
-            shutil.rmtree(self.bench.path / name, ignore_errors=True)
+    def _remove_bench_dirs(self) -> None:
+        for name in self._created_directories:
+            p = self.bench.path / name
+            if p.exists() or p.is_symlink():
+                shutil.rmtree(p, ignore_errors=True)
 
     def _create_bench_structure(self) -> None:
-        new_dirs = [name for name in _BENCH_DIRS if not os.path.lexists(self.bench.path / name)]
+        self._created_directories = [
+            name
+            for name in _BENCH_DIRS
+            if not (self.bench.path / name).exists() and not (self.bench.path / name).is_symlink()
+        ]
+        self._rollback_actions.append(("bench directories", self._remove_bench_dirs))
         self.bench.create_directories()
         self.bench.write_common_site_config()
         with update_common_site_config(self.bench.sites_path) as config:
             config.setdefault("server_script_enabled", True)
-        if new_dirs:
-            self._rollback_actions.append(("bench directories", lambda: self._remove_bench_dirs(new_dirs)))
 
     def _create_virtualenv(self, python_env_manager) -> None:
         python_env_manager.ensure_python()
@@ -99,9 +110,18 @@ class BenchInitializer:
             elif not app.is_cloned:
                 on_progress(f"  Cloning {app.config.name}...")
                 app.clone()
+            if self.commit and app.config.name == self.bench.config.framework_app.name:
+                on_progress(f"  Checking out {app.config.name} at {self.commit[:8]}...")
+                app.checkout_commit(self.commit)
             on_progress(f"  Installing {app.config.name}...")
             python_env_manager.install_app(app)
         self.bench.write_apps_txt()
+
+    def _build_framework_assets(self, python_env_manager) -> None:
+        """Build the framework app's assets, or download its prebuilt archive."""
+        from pilot.core.app import App
+
+        python_env_manager.build_assets_for_app(App(self.bench.config.framework_app, self.bench))
 
     def _ensure_admin_password(self) -> None:
         import secrets

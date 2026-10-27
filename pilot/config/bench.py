@@ -24,6 +24,7 @@ from pilot.config.llm import LLMConfig
 from pilot.config.mariadb import MariaDBConfig
 from pilot.config.nginx import NginxConfig
 from pilot.config.postgres import PostgresConfig
+from pilot.config.processes import ProcessesConfig
 from pilot.config.production import ProductionConfig
 from pilot.config.proxy import ProxyConfig
 from pilot.config.redis import RedisConfig
@@ -83,6 +84,7 @@ FLAT_KEYS = {
 
 # Framework branches the setup wizard offers, newest/recommended first.
 FRAMEWORK_BRANCHES = ["version-16", "develop"]
+ONBOARDING_STATES = ("", "minimized", "dismissed")
 
 _DEFAULT_DATA: dict = {
     "bench": {"name": "", "python": "3.14"},
@@ -128,11 +130,13 @@ class BenchConfig:
     allow_developer_mode: bool = False
     # Whether `uv pip install -e` pulls an app's `dev` extra, such as frappe's watchdog.
     install_dev_extra: bool = True
+    onboarding: str = ""
     production: ProductionConfig = field(default_factory=ProductionConfig)
     lite_mode: LiteModeConfig = field(default_factory=LiteModeConfig)
     nginx: NginxConfig = field(default_factory=NginxConfig)
     gunicorn: GunicornConfig = field(default_factory=GunicornConfig)
     build: BuildConfig = field(default_factory=BuildConfig)
+    processes: ProcessesConfig = field(default_factory=ProcessesConfig)
     letsencrypt: LetsEncryptConfig = field(default_factory=LetsEncryptConfig)
     admin: AdminConfig = field(default_factory=AdminConfig)
     central: CentralConfig = field(default_factory=CentralConfig)
@@ -223,6 +227,7 @@ class BenchConfig:
             default_branch=bench_data.get("default_branch", ""),
             allow_developer_mode=bench_data.get("allow_developer_mode", False),
             install_dev_extra=bench_data.get("install_dev_extra", True),
+            onboarding=bench_data.get("onboarding", ""),
             apps=apps,
             mariadb=common.mariadb,
             postgres=common.postgres,
@@ -272,6 +277,7 @@ class BenchConfig:
         self.mariadb.validate()
         self.gunicorn.validate()
         self.build.validate()
+        self.processes.validate()
         self.lite_mode.validate()
         self.production.validate(self.name)
         self.admin.validate(self.production.enabled, self.name)
@@ -554,6 +560,8 @@ class BenchConfig:
         }
         if self.default_branch:
             bench["default_branch"] = self.default_branch
+        if self.onboarding:
+            bench["onboarding"] = self.onboarding
         return bench
 
     def _apps_section(self) -> list[ConfigDict]:
@@ -805,6 +813,11 @@ _SECTIONS: tuple[_Section, ...] = (
         lambda config: config._build_section() if config.build.memory_limit_mb else None,
     ),
     _Section(
+        "processes",
+        lambda data: ProcessesConfig.from_dict(data.get("processes", {})),
+        lambda config: {"disabled": config.processes.disabled} if config.processes.disabled else None,
+    ),
+    _Section(
         "admin",
         lambda data: AdminConfig.from_dict(data.get("admin", {})),
         lambda config: config._admin_section(),
@@ -898,6 +911,7 @@ _BENCH_KEYS = {
     "default_branch",
     "allow_developer_mode",
     "install_dev_extra",
+    "onboarding",
 }
 # Keys older Pilot versions wrote that the parser still tolerates.
 _PRODUCTION_LEGACY = {"lightweight", "nginx", "use_companion_manager"}
@@ -914,6 +928,7 @@ def _bench_schema() -> TomlSchema:
             "lite_mode": TomlSchema(keys=field_names(LiteModeConfig)),
             "gunicorn": TomlSchema(keys=field_names(GunicornConfig) | _GUNICORN_LEGACY),
             "build": TomlSchema(keys=field_names(BuildConfig)),
+            "processes": TomlSchema(keys=field_names(ProcessesConfig)),
             "admin": TomlSchema(keys=field_names(AdminConfig)),
             "s3": TomlSchema(keys=field_names(S3Config)),
             "llm": TomlSchema(keys=field_names(LLMConfig)),

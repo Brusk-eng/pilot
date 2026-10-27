@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { Badge, Button, Dialog, Dropdown, type DropdownItem, ErrorMessage, Select } from 'frappe-ui'
+import {
+  Alert,
+  Badge,
+  Button,
+  Dialog,
+  Dropdown,
+  type DropdownItem,
+  ErrorMessage,
+  Select,
+} from 'frappe-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { apiErrorMessage } from '@/api/client'
@@ -10,6 +19,7 @@ import ListSkeleton from '@/components/common/ListSkeleton.vue'
 import Table from '@/components/common/Table.vue'
 import BackupConfigDialog from '@/components/sites/BackupConfigDialog.vue'
 import RestoreBackupDialog from '@/components/sites/RestoreBackupDialog.vue'
+import { useObjectStorage } from '@/composables/settings/useObjectStorage'
 import { useSite } from '@/composables/sites/useSite'
 import type { Backup, BackupFile, BackupSchedule } from '@/types/siteBackups'
 import { cronToLabel } from '@/utils/backup'
@@ -34,6 +44,19 @@ const {
   setBackupsPageLength,
 } = useSite(props.siteName)
 
+const {
+  loading: storageLoading,
+  connected: storageConnected,
+  load: loadStorage,
+} = useObjectStorage()
+
+const storageAction = {
+  label: 'Connect storage',
+  onClick: () => {
+    router.push({ name: 'Settings', params: { section: 'general', subSection: 's3-bucket' } })
+  },
+}
+
 const pageLengths = [20, 50, 100].map((n) => ({ label: `${n} per page`, value: n }))
 
 const backingUp = ref(false)
@@ -41,13 +64,15 @@ const error = ref('')
 
 const configRef = ref<InstanceType<typeof BackupConfigDialog> | null>(null)
 const config = ref<BackupSchedule | null>(null)
-const enabled = computed(() => !!config.value?.schedule)
+const isDefault = computed(() => !!config.value?.retention?.calendar_rotation)
+const enabled = computed(() => !!config.value?.schedule || isDefault.value)
 
-const scheduleSummary = computed(() =>
-  enabled.value
+const scheduleSummary = computed(() => {
+  if (isDefault.value) return 'Daily, with the default retention policy.'
+  return enabled.value
     ? `${cronToLabel(config.value?.schedule)}.`
-    : 'Manual backups are kept until you delete them.',
-)
+    : 'Manual backups are kept until you delete them.'
+})
 
 const loadConfig = async () => {
   try {
@@ -197,10 +222,21 @@ const confirmDelete = async () => {
 onMounted(() => {
   loadBackups()
   loadConfig()
+  loadStorage()
 })
 </script>
 
 <template>
+  <Alert
+    v-if="!storageLoading && !storageConnected"
+    class="mb-4 border border-outline-gray-2"
+    theme="blue"
+    title="Backups stay on this server"
+    description="Connect object storage to keep a copy offsite."
+    :dismissible="false"
+    :primary-action="storageAction"
+  />
+
   <div class="flex sm:flex-row flex-col sm:justify-between sm:items-center gap-3 mb-4">
     <div>
       <p class="font-medium text-ink-gray-8">Automated backups</p>
@@ -264,6 +300,7 @@ onMounted(() => {
 
     <div v-if="backupsHasMore || backups.length > 20" class="flex items-center gap-3 mt-2 px-1">
       <Select
+        side="bottom"
         size="sm"
         :model-value="backupsLimit"
         :options="pageLengths"

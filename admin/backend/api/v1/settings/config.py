@@ -4,9 +4,23 @@ import smtplib
 
 from pilot.config import BenchConfig, FirewallRule, S3Config, WafCondition, WafRule, WorkerGroup
 from pilot.config.alert_limit import RESOURCE_LIMIT_FIELDS
+from pilot.config.bench import ONBOARDING_STATES
 from pilot.config.llm import LLMConfig
 from pilot.config.mail import MailConfig
 from pilot.core.alerts import check_mail_credentials
+
+_GROUP_TYPES: dict[str, type] = {
+    "bench": dict,
+    "lite_mode": dict,
+    "letsencrypt": dict,
+    "workers": list,
+    "firewall": dict,
+    "waf": dict,
+    "llm": dict,
+    "s3": dict,
+    "resource_limits": dict,
+    "mail": dict,
+}
 
 
 def _coerce_int(value):
@@ -24,8 +38,12 @@ class ConfigPatcher:
         self.mail = mail or MailConfig()
 
     def apply(self) -> str | None:
-        self._apply_bench()
+        if error := self.get_group_type_error():
+            return error
+        if error := self._apply_bench():
+            return error
         self._apply_lite_mode()
+        self._apply_letsencrypt()
         self._apply_workers()
         self._apply_firewall()
         self._apply_waf()
@@ -43,7 +61,14 @@ class ConfigPatcher:
             return str(error)
         return None
 
-    def _apply_bench(self) -> None:
+    def get_group_type_error(self) -> str | None:
+        for name, expected in _GROUP_TYPES.items():
+            value = self.data.get(name)
+            if value is not None and not isinstance(value, expected):
+                return f"{name} must be {'a list' if expected is list else 'an object'}."
+        return None
+
+    def _apply_bench(self) -> str | None:
         bench = self.data.get("bench") or {}
         if "http_port" in bench:
             self.config.http_port = int(bench["http_port"])
@@ -53,11 +78,21 @@ class ConfigPatcher:
             self.config.default_branch = str(bench["default_branch"]).strip()
         if "allow_developer_mode" in bench:
             self.config.allow_developer_mode = bool(bench["allow_developer_mode"])
+        if "onboarding" in bench:
+            if bench["onboarding"] not in ONBOARDING_STATES:
+                return f"bench.onboarding must be one of: {', '.join(repr(state) for state in ONBOARDING_STATES)}"
+            self.config.onboarding = bench["onboarding"]
+        return None
 
     def _apply_lite_mode(self) -> None:
         lite_mode = self.data.get("lite_mode") or {}
         if "enabled" in lite_mode:
             self.config.lite_mode.enabled = bool(lite_mode["enabled"])
+
+    def _apply_letsencrypt(self) -> None:
+        letsencrypt = self.data.get("letsencrypt") or {}
+        if "email" in letsencrypt:
+            self.config.letsencrypt.email = str(letsencrypt["email"]).strip()
 
     def _apply_workers(self) -> None:
         workers = self.data.get("workers")

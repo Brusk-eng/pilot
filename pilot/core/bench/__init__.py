@@ -12,8 +12,11 @@ from pilot.exceptions import BenchError
 if TYPE_CHECKING:
     from pilot.config import S3Config, SiteConfig
     from pilot.core.app import App, NewAppOptions, RevisionPin
+    from pilot.core.bench.backups import BenchBackups
     from pilot.core.bench.hostname_aliases import HostnameAliases
     from pilot.core.bench.migration.store import MigrationStore
+    from pilot.core.bench.processes import BenchProcesses
+    from pilot.core.bench.site_aliases import SiteAliases
     from pilot.core.database import Database
     from pilot.core.notification import NotificationStore
     from pilot.core.site import Site
@@ -46,7 +49,7 @@ class Bench:
     def _resolve_path(path_or_name: str | Path) -> Path:
         path = Path(path_or_name).expanduser()
         if isinstance(path_or_name, Path) or path.is_absolute() or path.parent != Path("."):
-            return path
+            return path.absolute()
 
         from pilot.utils import benches_dir
 
@@ -64,6 +67,7 @@ class Bench:
         admin_password: str = "",
         configure: Callable[[BenchConfig], None] | None = None,
         on_progress: Callable[[str], None] = lambda message: None,
+        frappe_branch: str | None = None,
     ) -> "Bench":
         """Create the bench directory and bench.toml. `configure` adjusts the new
         config before it is written."""
@@ -72,6 +76,7 @@ class Bench:
         return BenchCreator(
             target_directory,
             name,
+            frappe_branch=frappe_branch,
             process_manager=process_manager,
             admin_domain=admin_domain,
             admin_tls=admin_tls,
@@ -99,6 +104,24 @@ class Bench:
         from pilot.core.bench.migration.store import MigrationStore
 
         return MigrationStore(self)
+
+    @cached_property
+    def processes(self) -> "BenchProcesses":
+        from pilot.core.bench.processes import BenchProcesses
+
+        return BenchProcesses(self)
+
+    @cached_property
+    def site_aliases(self) -> "SiteAliases":
+        from pilot.core.bench.site_aliases import SiteAliases
+
+        return SiteAliases(self)
+
+    @cached_property
+    def backups(self) -> "BenchBackups":
+        from pilot.core.bench.backups import BenchBackups
+
+        return BenchBackups(self)
 
     @cached_property
     def notifications(self) -> "NotificationStore":
@@ -163,7 +186,7 @@ class Bench:
 
     @property
     def is_initialized(self) -> bool:
-        return self.python.exists()
+        return self.python.exists() and not (self.path / ".initializing").exists()
 
     @property
     def frappe_call(self) -> list[str]:
@@ -311,6 +334,13 @@ class Bench:
         return (self.apps_path / "frappe" / "frappe" / "runner.py").is_file()
 
     @property
+    def has_runner_socket_support(self) -> bool:
+        """Whether lite mode's process serves on a socket systemd passes it. An older one binds
+        the port itself, which a socket already holding it would refuse."""
+        runner = self.apps_path / "frappe" / "frappe" / "runner.py"
+        return runner.is_file() and "LISTEN_FDS" in runner.read_text()
+
+    @property
     def is_lite_mode(self) -> bool:
         """Whether lite mode is enabled and supported by Frappe."""
         return self.config.lite_mode.enabled and self.supports_lite_mode
@@ -434,6 +464,9 @@ class Bench:
         if not target:
             return None
         skip = normalize_host(ignoring) if ignoring else ""
+        pending_owner = self.site_aliases.pending_owner(target)
+        if pending_owner and normalize_host(pending_owner) != skip:
+            return pending_owner
         for site in self.sites():
             if skip and normalize_host(site.config.name) == skip:
                 continue
@@ -472,8 +505,17 @@ class Bench:
         )
 
     @property
+    def admin_internal_endpoint(self) -> str:
+        """The loopback admin URL a site stores as `pilot_endpoint`."""
+        from pilot.utils import admin_url
+
+        if not self.config.production.enabled:
+            return admin_url(self.config)
+        return f"http://127.0.0.1:{self.config.admin.internal_port}"
+
+    @property
     def admin_endpoint(self) -> str:
-        """The admin URL a site stores as `pilot_endpoint`."""
+        """The public admin URL that a browser on a site reaches."""
         from pilot.core.adapters.domain_provider import DomainRouteProvider
         from pilot.utils import admin_url, matches_wildcard
 
@@ -517,10 +559,11 @@ class Bench:
 
         return Session(self).issue_setup_link_token()
 
-    def initialize(self, on_progress: Callable[[str], None] = lambda message: None) -> None:
+    def initialize(self, commit: str = "", on_progress: Callable[[str], None] = lambda message: None) -> None:
+        """Set up the bench from bench.toml; `commit` pins the framework app."""
         from pilot.core.bench.initializer import BenchInitializer
 
-        BenchInitializer(self).run(on_progress)
+        BenchInitializer(self, commit).run(on_progress)
 
     def setup_production(
         self,

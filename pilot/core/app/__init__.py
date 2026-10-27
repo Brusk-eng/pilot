@@ -18,6 +18,7 @@ from pilot.exceptions import BenchError
 from pilot.utils import installed_app_version, run_command
 
 if TYPE_CHECKING:
+    from pilot.core.app.processes import AppProcesses
     from pilot.core.bench import Bench
 
 
@@ -132,6 +133,12 @@ class App:
         return root / self.config.name
 
     @property
+    def processes(self) -> "AppProcesses":
+        from pilot.core.app.processes import AppProcesses
+
+        return AppProcesses(self)
+
+    @property
     def installed_version(self) -> str:
         """The version pip installed for this app, read from dist-info metadata."""
         return installed_app_version(self.bench.env_path, self.config.name)
@@ -155,14 +162,13 @@ class App:
 
     @property
     def has_source_changes(self) -> bool:
-        """Local edits that published assets lack. Files the asset build rewrites do not count,
-        or one server build would rule out prebuilt assets for good."""
+        """Uncommitted edits that published assets lack. Files the asset build rewrites do not count,
+        or one server build would rule out prebuilt assets for good. Commits need no check: archives
+        are found by commit, and a shallow pinned checkout reads as ahead of its upstream."""
         from pilot.core.app.prebuilt_assets import build_output_paths
 
         repo = self._repository.repo
-        if repo.has_unpushed_commits:
-            return True
-        outputs = build_output_paths(self)
+        outputs = [*build_output_paths(self), f"{self.config.name}/public/app_builds"]
         build_lockfiles = self.failed_build_lockfiles
         return any(
             Path(path).name != "components.d.ts"
@@ -215,6 +221,14 @@ class App:
     def has_page_islands(self) -> bool:
         """Whether the app has Frappe UI pages, whose islands Frappe builds."""
         return any((self.path / self.config.name).glob("*/page/*/*.island.js"))
+
+    @property
+    def has_studio_apps(self) -> bool:
+        """Whether the app exports Studio apps: `studio/<name>/<scrubbed name>.json`."""
+        return any(
+            path.stem == path.parent.name.replace(" ", "_").replace("-", "_").lower()
+            for path in (self.path / "studio").glob("*/*.json")
+        )
 
     @property
     def current_branch(self) -> str:
@@ -496,7 +510,7 @@ class App:
 
     def record_branch(self) -> None:
         """Persist this app's tracked branch to bench.toml so it survives a
-        detached HEAD after a later commit pin (see BenchInventory._app_at)."""
+        detached HEAD after a later commit pin (see BenchInventory.get_configured_app)."""
         if not self.config.branch or self.is_commit_hash(self.config.branch):
             return
         from pilot.config import BenchConfig

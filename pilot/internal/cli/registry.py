@@ -16,6 +16,7 @@ from pilot.internal.cli.dispatch import CliContext, load_bench
 GROUP_HELP = {
     "admin": "Admin control-plane commands.",
     "dev": "Develop an app from its own repository.",
+    "processes": "Bench and app process controls.",
     "setup": "Production setup commands.",
     "remove": "Teardown commands.",
     "tasks": "Admin task worker controls.",
@@ -76,7 +77,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     for cls in _discover():
         target = group_subparsers[cls.group] if cls.group else sub
-        cmd_parser = target.add_parser(cls.name, help=cls.help, description=cls.help)
+        cmd_parser = target.add_parser(cls.name, aliases=cls.aliases, help=cls.help, description=cls.help)
         add_command_arguments(cls, cmd_parser)
         cmd_parser.set_defaults(_command_cls=cls)
 

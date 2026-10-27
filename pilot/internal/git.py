@@ -44,6 +44,10 @@ class GitRepo:
     def head_sha(self) -> str:
         return self._text("rev-parse", "HEAD")
 
+    def get_commit_sha(self, ref: str) -> str:
+        """The commit `ref` points at, or '' when this clone does not have it."""
+        return self._text("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}")
+
     @property
     def short_head(self) -> str:
         return self._text("rev-parse", "--short", "HEAD")
@@ -54,6 +58,10 @@ class GitRepo:
 
     def commit_subject(self, ref: str = "HEAD") -> str:
         return self._text("log", "-1", "--format=%s", ref)
+
+    def get_commit_time(self, ref: str = "HEAD") -> int:
+        """Committer time of `ref` in Unix seconds, or 0 when it is missing."""
+        return int(self._text("log", "-1", "--format=%ct", ref) or 0)
 
     @property
     def has_local_changes(self) -> bool:

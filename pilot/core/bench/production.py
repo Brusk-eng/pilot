@@ -37,6 +37,8 @@ class BenchProduction:
         from pilot.managers.processes.local import ProcessManager
 
         manager = cast("ManagedProcessManager", ProcessManager.for_bench(self.bench))
+        # The configuration must build before the bench stops.
+        manager.check_config()
         on_progress("Stopping the running processes")
         manager.stop()
         # A failed step must not leave the sites down.
@@ -110,11 +112,19 @@ class BenchProduction:
 
     def setup_letsencrypt(self) -> None:
         from pilot.exceptions import ConfigError
-        from pilot.managers.letsencrypt import LetsEncryptManager, install_renewal_timer
+        from pilot.managers.letsencrypt import (
+            LetsEncryptManager,
+            install_renewal_timer,
+            letsencrypt_email_required,
+        )
         from pilot.managers.nginx import NginxManager
 
+        if not letsencrypt_email_required(self.bench):
+            return
         if not self.bench.config.letsencrypt.email:
-            raise ConfigError("letsencrypt.email is not set. Run 'pilot setup production --letsencrypt-email <email>', or set letsencrypt.email in common_config.toml.")
+            raise ConfigError(
+                "letsencrypt.email is not set. Run 'pilot setup production --letsencrypt-email <email>', or set letsencrypt.email in common_config.toml."
+            )
         letsencrypt_manager = LetsEncryptManager(self.bench)
         nginx_manager = NginxManager(self.bench)
         letsencrypt_manager.install()

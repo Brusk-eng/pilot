@@ -47,6 +47,22 @@ def test_a_clean_checkout_has_no_source_changes(app: App) -> None:
     assert app.has_source_changes is False
 
 
+def test_a_commit_pinned_behind_a_shallow_clone_s_tip_has_no_source_changes(app: App, tmp_path: Path) -> None:
+    """Pilot clones the branch tip with depth 1, then fetches the pinned commit with depth 1;
+    the two share no history, so the pinned commit reads as ahead of its upstream."""
+    origin = tmp_path / "origin"
+    app.path.rename(origin)
+    pinned = GitRepo(origin).head_sha
+    branch = GitRepo(origin).branch
+    _git(origin, "commit", "-q", "--allow-empty", "-m", "tip")
+    _git(tmp_path, "clone", "-q", "--depth", "1", "--branch", branch, f"file://{origin}", str(app.path))
+    _git(app.path, "fetch", "-q", "--depth", "1", "origin", pinned)
+    _git(app.path, "checkout", "-q", "-B", branch, "FETCH_HEAD")
+
+    assert GitRepo(app.path).has_unpushed_commits is True
+    assert app.has_source_changes is False
+
+
 def test_files_the_asset_build_rewrites_do_not_count(app: App) -> None:
     for name in ("crm/www/crm.html", "crm/public/frontend/index.js", "frontend/components.d.ts"):
         (app.path / name).write_text("rebuilt")
@@ -77,6 +93,26 @@ def test_an_app_with_a_frappe_ui_page_has_page_islands(app: App) -> None:
     (page / "board.island.js").write_text("export default {}")
 
     assert app.has_page_islands is True
+
+
+def test_an_app_with_an_exported_studio_app_has_studio_apps(app: App) -> None:
+    # Frappe keeps its Studio editor in studio/frontend, which is not a Studio app.
+    (app.path / "studio" / "frontend").mkdir(parents=True)
+    (app.path / "studio" / "frontend" / "package.json").write_text("{}")
+    assert app.has_studio_apps is False
+
+    (app.path / "studio" / "Help-Desk").mkdir()
+    (app.path / "studio" / "Help-Desk" / "help_desk.json").write_text("{}")
+
+    assert app.has_studio_apps is True
+
+
+def test_a_studio_build_does_not_count_even_when_git_does_not_ignore_it(app: App) -> None:
+    build = app.path / "crm" / "public" / "app_builds" / "portal" / "index.js"
+    build.parent.mkdir(parents=True)
+    build.write_text("built")
+
+    assert app.has_source_changes is False
 
 
 def test_a_failed_build_leaves_its_lockfiles_and_they_do_not_count(app: App) -> None:

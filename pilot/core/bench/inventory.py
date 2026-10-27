@@ -25,16 +25,34 @@ class BenchInventory:
         if not app_path.is_dir():
             raise BenchError(f"App {name} not found in bench")
 
-        return self._app_at(app_path)
+        return self.get_app_at(app_path)
 
     def apps(self) -> list["App"]:
         if not self.bench.apps_path.is_dir():
             return []
         return [
-            self._app_at(app_path)
+            self.get_app_at(app_path)
             for app_path in sorted(self.bench.apps_path.iterdir())
             if app_path.is_dir() and (app_path / ".git").exists()
         ]
+
+    def get_app_at(self, app_path: Path) -> "App":
+        """The app at `app_path`, with git state over bench.toml for its branch. bench.toml
+        supplies the path of a linked checkout."""
+        from pilot.config import AppConfig
+        from pilot.core.app import App
+
+        configured = self.get_configured_app(app_path.name)
+        return App(
+            AppConfig(
+                name=app_path.name,
+                repo=self._git_remote(app_path),
+                branch=self._git_branch(app_path) or configured.branch,
+                path=configured.path,
+                follow_branch=configured.follow_branch,
+            ),
+            self.bench,
+        )
 
     def registered_apps(self) -> list[str]:
         apps_txt = self.bench.sites_path / "apps.txt"
@@ -109,22 +127,12 @@ class BenchInventory:
 
         return GitRepo(path).branch
 
-    def _app_at(self, app_path: Path) -> "App":
-        """The app in `app_path`. bench.toml supplies the branch when a pinned checkout
-        leaves HEAD detached, and the path of a linked checkout."""
+    def get_configured_app(self, name: str) -> "AppConfig":
+        """The bench.toml entry for this app, or an empty one when it has none. Its branch
+        covers a pinned checkout that leaves HEAD detached."""
         from pilot.config import AppConfig
-        from pilot.core.app import App
 
-        configured = self._configured_app(app_path.name)
-        return App(
-            AppConfig(
-                name=app_path.name,
-                repo=self._git_remote(app_path),
-                branch=self._git_branch(app_path) or (configured.branch if configured else ""),
-                path=configured.path if configured else "",
-            ),
-            self.bench,
+        return next(
+            (app for app in self.bench.config.apps if app.name == name),
+            AppConfig(name=name, repo="", branch=""),
         )
-
-    def _configured_app(self, name: str) -> "AppConfig | None":
-        return next((app for app in self.bench.config.apps if app.name == name), None)

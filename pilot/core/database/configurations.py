@@ -14,6 +14,7 @@ from pilot.core.database.mariadb_variables import (
 from pilot.core.database.quick_actions import DatabaseQuickActions
 from pilot.exceptions import DatabaseError
 from pilot.managers.database.mariadb import MariaDBManager
+from pilot.managers.database.memory import MEMORY_LIMIT_NAMES, MEMORY_LIMIT_READ_ONLY_REASON
 from pilot.managers.platform import is_linux
 
 if TYPE_CHECKING:
@@ -147,6 +148,8 @@ class DatabaseConfigurations:
         }
 
     def prepare_change(self, name: str, value: object) -> DatabaseConfigurationChange:
+        if name in MEMORY_LIMIT_NAMES:
+            raise DatabaseError(MEMORY_LIMIT_READ_ONLY_REASON)
         spec = mariadb_variable_spec(name)
         if not spec.editable:
             spec.validate_input(value)
@@ -175,6 +178,8 @@ class DatabaseConfigurations:
         }
 
     def set(self, name: str, value: object) -> bool:
+        if name in MEMORY_LIMIT_NAMES:
+            raise DatabaseError(MEMORY_LIMIT_READ_ONLY_REASON)
         spec = mariadb_variable_spec(name)
         requested: MariaDBValue = spec.validate_input(value)
         edit_reason = self._edit_reason(require_reachable=True)
@@ -363,8 +368,6 @@ class DatabaseConfigurations:
             return _MARIADB_ONLY
         if self.config.mariadb.existing:
             return _EXTERNAL_READ_ONLY
-        if not self.config.admin.allow_bench_management:
-            return "Bench management is disabled on this server."
         if not is_linux():
             return "MariaDB configuration changes are available only on Linux."
         if require_reachable:

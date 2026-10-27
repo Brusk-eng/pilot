@@ -19,6 +19,8 @@ PROTECTED_CONFIG_KEYS = frozenset(
         # Pilot pins it on a rename; a site-scoped caller setting it could squat a
         # certificate lineage another site or a future one would need.
         "cert_name",
+        "cloud_server_url",
+        "cloud_settings_embed_url",
         "db_host",
         "db_name",
         "db_password",
@@ -174,6 +176,21 @@ def _query_site_setup_flag(bench_root: Path, site_name: str) -> bool | None:
     if not rows:
         return False
     return str(rows[0][0]).strip().lower() in _TRUE_SINGLES_VALUES
+
+
+def is_backup_encryption_enabled(bench_root: Path, site_name: str) -> bool:
+    """True when the probe fails too: streaming an encrypted site would upload plaintext."""
+    rows = _query_site_database(
+        bench_root,
+        site_name,
+        lambda database: (
+            f"SELECT value FROM {database.quote_identifier('tabSingles')} "
+            "WHERE doctype = 'System Settings' AND field = 'encrypt_backup'"
+        ),
+    )
+    if rows is None:
+        return True
+    return bool(rows) and str(rows[0][0]).strip().lower() in _TRUE_SINGLES_VALUES
 
 
 def _query_site_database(

@@ -77,14 +77,21 @@ class AppRepository:
 
     def has_migrate_changes(self, pin: RevisionPin) -> bool:
         """Whether moving to `pin` changes anything migrate syncs. True when the diff is unknown."""
-        repo = self.repo
-        if not repo.has_commit(pin.ref):
-            self._sync_remote_url()
-            repo.fetch(pin.ref, timeout=_FETCH_TIMEOUT_SECONDS)
-        files = repo.get_changed_files(self.installed_hash, pin.ref)
+        self.fetch_missing_commit(pin.ref)
+        files = self.repo.get_changed_files(self.installed_hash, pin.ref)
         if files is None:
             return True
         return any(pattern.match(path) for pattern in _MIGRATE_PATHS for path in files)
+
+    def fetch_missing_commit(self, commit: str) -> None:
+        """Fetch `commit` unless it is local. A shallow clone takes it without history,
+        since a plain fetch into one downloads the whole repository."""
+        repo = self.repo
+        if repo.has_commit(commit):
+            return
+        self._sync_remote_url()
+        depth = ["--depth=1"] if repo.is_shallow else []
+        repo.fetch(*depth, commit, timeout=_FETCH_TIMEOUT_SECONDS)
 
     @property
     def marketplace_entry(self) -> dict | None:
@@ -114,30 +121,32 @@ class AppRepository:
     def _is_ahead_of_installed(self, commit: str, version: str) -> bool:
         """Whether `commit` descends from HEAD. A stale registry can advertise an older
         release, so only proven descent counts. When a shallow clone holds both commits
-        without the history between them, a strictly newer version decides."""
+        without the history between them, the version decides, then the commit date."""
         installed = self.installed_hash
         if installed == commit:
             return False
         if not installed:
             return True  # HEAD is unreadable - moving to the published commit is the fix
+        self.fetch_missing_commit(commit)
         repo = self.repo
-        if not repo.has_commit(commit):
-            self._sync_remote_url()
-            # Fetching a descendant also brings the history that links it to HEAD.
-            repo.fetch(commit, timeout=_FETCH_TIMEOUT_SECONDS)
         if repo.is_ancestor(installed, commit):
             return True
         if not repo.has_commit(commit) or repo.is_ancestor(commit, installed):
             return False
-        return self._is_newer_than_installed(version)
+        return self._is_newer_than_installed(commit, version)
 
-    def _is_newer_than_installed(self, version: str) -> bool:
+    def _is_newer_than_installed(self, commit: str, version: str) -> bool:
+        """A newer version, or the same version at a later commit, since develop releases share one."""
         from pilot._vendor.packaging.version import InvalidVersion, Version
 
         try:
-            return Version(version) > Version(self.app.installed_version)
+            release, installed = Version(version), Version(self.app.installed_version)
         except InvalidVersion:
             return False
+        if release != installed:
+            return release > installed
+        repo = self.repo
+        return repo.get_commit_time(commit) > repo.get_commit_time(self.installed_hash)
 
     @property
     def remote_url(self) -> str:
@@ -341,6 +350,9 @@ class AppRepository:
 
     def checkout_pinned_commit(self, sha: str) -> None:
         """Check out a specific commit SHA, staying on the app's configured branch."""
+        if self.repo.has_commit(sha):
+            self._checkout_pinned_ref(sha)
+            return
         self._sync_remote_url()
         self.repo.prune_stale_temp_packs()
         try:
@@ -376,8 +388,10 @@ class AppRepository:
         check anything out. The stash is left alone on success: the revision being
         moved to is free to conflict with it, and dropping it would lose work.
         """
-        stashed = self.repo.stash_all()
+        if self.is_at_pinned_ref(ref):
+            return
         branch = self.app.config.branch
+        stashed = self.repo.stash_all()
         if branch and not self.is_commit_hash(branch) and self.repo.checkout_new_branch(branch, ref):
             return
         try:
@@ -386,3 +400,10 @@ class AppRepository:
             if stashed:
                 self.repo.stash_pop()
             raise
+
+    def is_at_pinned_ref(self, ref: str) -> bool:
+        """Check both the revision and configured branch before touching local edits."""
+        branch = self.app.config.branch
+        if branch and not self.is_commit_hash(branch) and self.repo.branch != branch:
+            return False
+        return self.repo.get_commit_sha(ref) == self.repo.head_sha != ""

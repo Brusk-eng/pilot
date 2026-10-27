@@ -82,32 +82,42 @@ class PythonAssetBuilder:
         )
 
     def build_assets_for_app(self, app: "App", force: bool = False) -> None:
-        app_public_dir = app.path / app.config.name / "public"
-        dist_dir = app_public_dir / "dist"
-
         # Desk serves /assets/frappe/node_modules, and every server build runs Frappe's esbuild.
         if app.config.name == "frappe":
             NodePackages(app.path).ensure_installed()
 
         # A linked checkout is built from its own source, never from a release.
-        if not force and not app.is_linked and not app.has_source_changes:
-            from pilot.core.app.prebuilt_assets import PrebuiltAssets
-
-            prebuilt = PrebuiltAssets(app)
-            if prebuilt.install():
-                self.setup_prebuilt_assets(app.config.name, app_public_dir, dist_dir, prebuilt.asset_maps)
-                if app.has_page_islands:
-                    self.build_page_islands()
-                return
+        if not force and not app.is_linked and not app.has_source_changes and self.install_prebuilt_assets(app):
+            return
 
         with app.record_lockfiles_on_failure():
             self.build_app_from_source(app)
+
+    def install_prebuilt_assets(self, app: "App") -> bool:
+        """Install the app's published assets and build what the archive lacks. False when none are published."""
+        from pilot.core.app.prebuilt_assets import PrebuiltAssets
+
+        prebuilt = PrebuiltAssets(app)
+        if not prebuilt.install():
+            return False
+        app_public_dir = app.path / app.config.name / "public"
+        self.setup_prebuilt_assets(
+            app.config.name, app_public_dir, app_public_dir / "dist", prebuilt.asset_maps, prebuilt.has_page_islands
+        )
+        if app.has_page_islands and not prebuilt.has_page_islands:
+            self.build_page_islands()
+        if app.has_studio_apps and not prebuilt.has_studio_apps:
+            self.build_studio_apps(app)
+        return True
 
     def build_app_from_source(self, app: "App") -> None:
         # Frappe's build runs the app's build script, which can build `frontend`/`roster`, so
         # their node_modules must be installed before it.
         for packages in get_app_packages(app.path, self.frontend_dirs(app)):
             packages.ensure_installed()
+        # Frappe's `after_app_build` hook builds the app's Studio apps with this editor.
+        if app.has_studio_apps:
+            self.studio_editor.ensure_installed()
 
         print(f"  Building assets for {app.config.name}...")
         sys.stdout.flush()
@@ -146,6 +156,7 @@ class PythonAssetBuilder:
         app_public_dir: Path,
         dist_dir: Path,
         asset_maps: dict[str, dict[str, str]] | None = None,
+        has_page_islands: bool = False,
     ) -> None:
         assets_dir = self.bench.sites_path / "assets"
         assets_dir.mkdir(exist_ok=True)
@@ -168,8 +179,10 @@ class PythonAssetBuilder:
         else:
             from pilot.core.app.prebuilt_assets import PAGE_ISLAND_URL
 
+            # Islands from the archive replace the bench's; otherwise the bench's stay for its rebuild.
+            keeping = "" if has_page_islands else PAGE_ISLAND_URL
             for name, entries in asset_maps.items():
-                self.merge_json(assets_dir / name, entries, replacing=f"/assets/{app_name}/", keeping=PAGE_ISLAND_URL)
+                self.merge_json(assets_dir / name, entries, replacing=f"/assets/{app_name}/", keeping=keeping)
         print(f"  Linked {app_link} -> {app_public_dir.resolve()}")
 
     def build_page_islands(self) -> None:
@@ -183,6 +196,26 @@ class PythonAssetBuilder:
         print("  Building Frappe UI page islands...")
         sys.stdout.flush()
         self.run_compiler(["node", str(script), "--production"], cwd=frappe_path, stream_output=True)
+
+    def build_studio_apps(self, app: "App") -> None:
+        """Build the app's exported Studio apps into `public/app_builds`, as Frappe's
+        `after_app_build` hook does. Frappe without a Studio editor (version-16) cannot."""
+        if not self.studio_editor.has_package_json:
+            return
+        self.studio_editor.ensure_installed()
+        print(f"  Building Studio apps for {app.config.name}...")
+        sys.stdout.flush()
+        build = f"from frappe.studio.build import build_standard_apps; build_standard_apps([{app.config.name!r}])"
+        self.run_compiler(
+            [str(self.bench.python), "-c", build],
+            cwd=self.bench.sites_path,
+            env=self.manager._build_env(),
+            stream_output=True,
+        )
+
+    @property
+    def studio_editor(self) -> NodePackages:
+        return NodePackages(self.bench.apps_path / "frappe" / "studio" / "frontend")
 
     def write_assets_json(self, app_name: str, dist_dir: Path, assets_dir: Path) -> None:
         assets = {
