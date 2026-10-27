@@ -79,14 +79,17 @@ class RedisManager:
     def running(self) -> Iterator[None]:
         """Serve the bench's Redis for the duration, for commands such as migrate
         that need it while the bench is stopped. Servers already up are left alone."""
+        binary = redis_server_binary()
         processes: list[subprocess.Popen] = []
         try:
             for name, port in self.servers.items():
                 if is_port_listening(port):
                     continue
+                if binary is None:
+                    raise BenchError("redis-server is not installed. Install Redis or Valkey, then try again.")
                 processes.append(
                     subprocess.Popen(
-                        [redis_server_binary() or "redis-server", str(self.bench.config_path / name)],
+                        [binary, str(self.bench.config_path / name)],
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
                     )
