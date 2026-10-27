@@ -96,7 +96,7 @@ request_drain_seconds = 60
 job_drain_seconds = 600
 ```
 
-Request and job limits are counted from the last restart; `0` disables a limit. The process waits until it is idle before restarting. Drain settings bound graceful shutdown; a job that exceeds its limit is abandoned. Lite mode uses one worker group, so multiple groups are merged by taking the union of queues and the sum of their counts.
+Request and job limits are counted from the last restart; `0` disables a limit. The process waits until it is idle before restarting. Drain settings bound graceful shutdown; a job that exceeds its limit is abandoned. Lite mode uses one worker group, so multiple groups are merged by taking the union of queues, the sum of their counts and the longest timeout.
 
 The process listens on `127.0.0.1:<http_port>` and serves realtime there too. Pilot updates `common_site_config.json` and nginx when lite mode changes. Frappe must provide `frappe/runner.py`; otherwise Pilot disables lite mode.
 
