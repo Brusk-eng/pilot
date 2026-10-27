@@ -74,7 +74,7 @@ def account_url(name: str):
 
     credentials = InstanceMetadata().get_credentials()
     if credentials is None:
-        return error_response("central_not_configured", "Central is not configured.", 503)
+        return error_response("central_not_configured", "Frappe Cloud is not configured.", 503)
 
     url = credentials["central_endpoint"].rstrip("/")
     audience = credentials["jwks_audience_id"]

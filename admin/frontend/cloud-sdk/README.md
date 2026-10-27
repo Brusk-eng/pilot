@@ -102,7 +102,7 @@ Build your own UI on the read calls, for example a plan badge or a banner. For c
 
 Requests use the current origin and session. They time out after 30 seconds. The SDK does not retry write calls.
 
-`changePlan(plan)` returns `{ queued, resized, progress_url }`. A new size stops the site for a few minutes. When `progress_url` is set, open it: the page lives on Central and brings the user back when the site is ready. During a free trial, Central refuses the call until the team adds a payment method.
+`changePlan(plan)` returns `{ queued, resized, progress_url }`. A new size stops the site for a few minutes. When `progress_url` is set, open it: the page lives on Central and brings the user back when the site is ready. During a free trial, the call resizes nothing: Central keeps the plan, and the site moves to it when a payment method converts the trial. `getPlanOptions` then lists the paid plans the trial may move to, with `selected` set to the plan it moves to. `getBilling` returns `plan_change.progress_url` while a plan change runs, such as that move.
 
 ## Handle feedback and errors
 
@@ -158,4 +158,4 @@ To test billing without host metadata, run this from the Pilot repository:
 .venv/bin/python -m scripts.cloud_settings_simulator --bench-root /path/to/local/bench
 ```
 
-Use a local development site that has the server APIs and a button to open the dialog. Set that site's `pilot_endpoint` to `http://127.0.0.1:8003`, then clear its cache. Keep its existing site token. Sign in as a System Manager and open Billing. The simulation controls are at `http://127.0.0.1:8124`. Save the sample profile, complete the local checkout, then click Check status. To test the trial flow, choose **Start a free trial** on the controls page: Billing then shows an open trial, and a completed checkout converts it and opens the plan step. You can reset the data or simulate an API failure. State stays in memory. Billing makes no real charges. Other Pilot operations still use the real local bench. Stop the simulator and restore the original endpoint when finished.
+Use a local development site that has the server APIs and a button to open the dialog. Set that site's `pilot_endpoint` to `http://127.0.0.1:8003`, then clear its cache. Keep its existing site token. Sign in as a System Manager and open Billing. The simulation controls are at `http://127.0.0.1:8124`. Save the sample profile, complete the local checkout, then click Check status. To test the trial flow, choose **Start a free trial** on the controls page: Billing then shows an open trial, and a completed checkout converts it. You can reset the data or simulate an API failure. State stays in memory. Billing makes no real charges. Other Pilot operations still use the real local bench. Stop the simulator and restore the original endpoint when finished.
