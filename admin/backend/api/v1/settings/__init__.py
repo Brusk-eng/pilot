@@ -244,6 +244,25 @@ _AUDIT_LOG_DEFAULT_LIMIT = 50
 _AUDIT_LOG_MAX_LIMIT = 500
 
 
+def _audit_filters() -> dict:
+    """Audit filters from the query string; `since`/`until` are ISO datetimes with an offset."""
+    from datetime import datetime
+
+    filters: dict[str, str | datetime | None] = {
+        "entry_type": request.args.get("type") or None,
+        "site": request.args.get("site") or None,
+        "status": request.args.get("status") or None,
+        "jti": request.args.get("jti") or None,
+    }
+    for key in ("since", "until"):
+        value = request.args.get(key)
+        moment = datetime.fromisoformat(value) if value else None
+        if moment is not None and moment.tzinfo is None:
+            raise ValueError(f"{key} must include a timezone offset.")
+        filters[key] = moment
+    return filters
+
+
 @audit_bp.get("/audit-events")
 def audit_log():
     """Return filtered bench audit events, newest first."""
@@ -253,16 +272,14 @@ def audit_log():
     bench_root = Path(current_app.config["BENCH_ROOT"])
     limit, offset = parse_pagination(_AUDIT_LOG_DEFAULT_LIMIT, _AUDIT_LOG_MAX_LIMIT)
     try:
+        filters = _audit_filters()
+    except ValueError as error:
+        return error_response("invalid_filter", str(error), 422)
+    try:
         log = AuditLog(Bench(bench_root))
 
         def fetch_newest(count: int) -> list:
-            return log.entries(
-                entry_type=request.args.get("type") or None,
-                site=request.args.get("site") or None,
-                status=request.args.get("status") or None,
-                jti=request.args.get("jti") or None,
-                limit=count,
-            )
+            return log.entries(**filters, limit=count)
 
         return paginated_response(fetch_newest, limit, offset)
     except Exception:
@@ -276,17 +293,19 @@ def export_audit_log():
 
     bench_root = Path(current_app.config["BENCH_ROOT"])
     try:
-        body = AuditLog(Bench(bench_root)).get_csv(
-            entry_type=request.args.get("type") or None,
-            site=request.args.get("site") or None,
-            status=request.args.get("status") or None,
-        )
+        filters = _audit_filters()
+    except ValueError as error:
+        return error_response("invalid_filter", str(error), 422)
+    try:
+        body = AuditLog(Bench(bench_root)).get_csv(**filters)
     except Exception:
         return error_response("audit_unavailable", "Could not read audit events.", 500)
     return Response(
         body,
         mimetype="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{bench_root.name}-activity.csv"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filters["site"] or bench_root.name}-activity-log.csv"'
+        },
     )
 
 
