@@ -598,7 +598,39 @@ def _modules_for(app: App, relpath: str, source: str) -> set[str]:
     full = app.path / relpath
     full.parent.mkdir(parents=True, exist_ok=True)
     full.write_text(source)
-    return {module for module, _lineno in ImportCheck()._file_imported_modules(app, full)}
+    return {module for module, _lineno in ImportCheck()._files_imported_modules(app, [full])[full]}
+
+
+def test_import_scan_batches_files_without_executing_them(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pilot.core.app.validator import imports
+
+    app = _make_app(
+        tmp_path,
+        "myapp",
+        '[project]\nname = "myapp"\n',
+        {
+            "myapp/hooks.py": "",
+            "myapp/first.py": "import requests\nfrom .second import value\n",
+            "myapp/second.py": "import yaml\nraise RuntimeError('do not execute')\n",
+            "myapp/test_ignored.py": "import test_only_dependency\n",
+        },
+    )
+    calls = []
+    original_run = imports.run_in_bench
+
+    def run(*args):
+        calls.append(args)
+        return original_run(*args)
+
+    monkeypatch.setattr(imports, "run_in_bench", run)
+    assert ImportCheck()._imported_module_locations(app) == {
+        "requests": ["myapp/first.py:1"],
+        "myapp.second": ["myapp/first.py:2"],
+        "yaml": ["myapp/second.py:1"],
+    }
+    assert len(calls) == 1
 
 
 def test_import_check_skips_stdlib_imports(tmp_path: Path) -> None:
@@ -1279,7 +1311,7 @@ def test_import_check_raises_app_validation_error_on_unparseable_syntax(tmp_path
     )
     bad_file = app.path / "myapp" / "bad.py"
     with pytest.raises(AppValidationError, match=r"has unparseable Python syntax in myapp/bad.py"):
-        ImportCheck()._file_imported_modules(app, bad_file)
+        ImportCheck()._files_imported_modules(app, [bad_file])
 
 
 def test_all_checks_delegate_to_bench_python(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1316,7 +1348,7 @@ def test_all_checks_delegate_to_bench_python(tmp_path: Path, monkeypatch: pytest
 
     SyntaxCheck().run(app)
     HooksCheck().run(app)
-    ImportCheck()._file_imported_modules(app, app.path / "myapp" / "utils.py")
+    ImportCheck()._files_imported_modules(app, [app.path / "myapp" / "utils.py"])
     FrappeCompatibilityCheck().run(app)
 
     assert len(calls) >= 4
