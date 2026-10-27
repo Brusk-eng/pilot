@@ -1,7 +1,7 @@
 import { call } from './request.ts'
 import type { AccountLinks, Analytics, Backups, BillingProfile, BillingSummary, CloudContext, DnsRecord, Domains, Marketplace, PaymentCheckout, PaymentGateway, PaymentMethodSetup, PaymentStatus, PlanChange, PlanOptions, SiteConfiguration, Storage, TaskStatus, TaskSubmission, Uptime } from './types.ts'
 
-export { CloudSettingsError, isMigrationConflict } from './request.ts'
+export { CloudSettingsError, isMigrationConflict, isNotConnectedToCentral } from './request.ts'
 export type * from './types.ts'
 
 

@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { createCloudSettings } from '../src/controller.ts'
 import { getRuntimeUrl } from '../src/dialog.ts'
 import { isCloudSettingsAvailable } from '../src/context.ts'
-import { call, CloudSettingsError } from '../src/request.ts'
+import { call, CloudSettingsError, isNotConnectedToCentral } from '../src/request.ts'
 
 test('opening twice mounts only the latest request; closing cancels a pending open', async () => {
   let resolveRuntime: (value: ReturnType<typeof makeRuntime>) => void = () => {}
@@ -82,4 +82,13 @@ test('server error messages render as plain text and malformed messages remain e
   const error = new CloudSettingsError(400, { _server_messages: JSON.stringify([JSON.stringify({ message: '<b>Invalid domain</b>' })]) })
   assert.equal(error.message, 'Invalid domain')
   assert.equal(new CloudSettingsError(403, { _server_messages: 'invalid' }).status, 403)
+})
+
+test('a server without Central is told apart from a Central error', () => {
+  const failure = (message: string) =>
+    new CloudSettingsError(417, { _server_messages: JSON.stringify([JSON.stringify({ message })]) })
+
+  assert.equal(isNotConnectedToCentral(failure('This server is not connected to Frappe Cloud.')), true)
+  assert.equal(isNotConnectedToCentral(failure('Cannot reach Central at https://central.test')), false)
+  assert.equal(isNotConnectedToCentral(new Error('This server is not connected to Frappe Cloud.')), false)
 })
