@@ -128,7 +128,7 @@ def is_restart_needed(old: dict, new: dict) -> bool:
 
 
 def worker_groups_payload(config: BenchConfig) -> list[dict]:
-    return [{"queues": list(group.queues), "count": group.count} for group in config.workers.groups]
+    return [group.to_dict() for group in config.workers.groups]
 
 
 def firewall_payload(config: BenchConfig) -> dict:

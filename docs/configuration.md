@@ -74,7 +74,7 @@ follow_branch = true
 
 A registry release is offered only when it is newer than the installed commit. A full clone checks that the release descends from it. A shallow clone fetches only the release commit, without the history between them, so a newer version decides, and between equal versions, such as `17.0.0-dev` on `develop`, a later commit date decides.
 
-`[redis]` defines separate cache and queue ports. Pilot writes them to `config/redis_cache.conf` and `config/redis_queue.conf` inside a `PILOT MANAGED BLOCK` and keeps the lines outside it, such as `loadmodule /path/to/redisearch.so`. `[[workers]]` defines queue groups and their process counts. Frappe only knows `default`, `short` and `long`, so Pilot lists every other queue under `workers` in `sites/common_site_config.json`. Pilot owns that key: it removes queues that no worker group lists, and keeps the settings of the others, such as `timeout`.
+`[redis]` defines separate cache and queue ports. Pilot writes them to `config/redis_cache.conf` and `config/redis_queue.conf` inside a `PILOT MANAGED BLOCK` and keeps the lines outside it, such as `loadmodule /path/to/redisearch.so`. `[[workers]]` defines queue groups, their process counts and an optional `timeout`: the default job timeout of the group's queues, in seconds. Without it, Frappe uses 1500 for `long` and 300 for other queues. Two groups cannot give one queue different timeouts. Lite mode folds the groups into one, which takes the longest timeout. Frappe only knows `default`, `short` and `long`, so Pilot lists every other queue, and every queue with a timeout, under `workers` in `sites/common_site_config.json`. Pilot leaves entries there for queues that no worker group lists.
 
 ## Runtime modes
 

@@ -9,6 +9,7 @@ import { errorMessage } from '@/utils/error'
 interface WorkerGroupForm {
   queues: string
   count: number | string
+  timeout: number | string
 }
 
 const loading = ref(true)
@@ -18,7 +19,11 @@ const groups = ref<WorkerGroupForm[]>([])
 const liteMode = ref(false)
 
 const toGroupForm = (group: WorkerGroupSettings): WorkerGroupForm => {
-  return { queues: (group.queues || []).join(', '), count: group.count }
+  return {
+    queues: (group.queues || []).join(', '),
+    count: group.count,
+    timeout: group.timeout ?? '',
+  }
 }
 
 const collapse = (groups: WorkerGroupSettings[]): WorkerGroupSettings[] => {
@@ -26,12 +31,13 @@ const collapse = (groups: WorkerGroupSettings[]): WorkerGroupSettings[] => {
     {
       queues: [...new Set(groups.flatMap((group) => group.queues || []))],
       count: groups.reduce((total, group) => total + group.count, 0),
+      timeout: Math.max(0, ...groups.map((group) => group.timeout || 0)) || null,
     },
   ]
 }
 
 const addGroup = () => {
-  groups.value.push({ queues: '', count: 1 })
+  groups.value.push({ queues: '', count: 1, timeout: '' })
 }
 
 const removeGroup = (index: number) => {
@@ -45,6 +51,10 @@ const queueList = (value: string | number) => {
     .filter(Boolean)
 }
 
+const timeoutValue = (value: number | string) => {
+  return String(value ?? '').trim() === '' ? null : Number(value)
+}
+
 const validate = () => {
   for (const [index, group] of groups.value.entries()) {
     if (!queueList(group.queues).length)
@@ -52,6 +62,9 @@ const validate = () => {
     const count = Number(group.count)
     if (!Number.isInteger(count) || count < 1)
       return `Worker group ${index + 1} count must be at least 1.`
+    const timeout = timeoutValue(group.timeout)
+    if (timeout !== null && (!Number.isInteger(timeout) || timeout < 1))
+      return `Worker group ${index + 1} timeout must be at least 1 second.`
   }
   return ''
 }
@@ -65,6 +78,7 @@ const save = async () => {
     const payload = groups.value.map((group) => ({
       queues: queueList(group.queues),
       count: Number(group.count),
+      timeout: timeoutValue(group.timeout),
     }))
     const result = await settingsApi.update({ workers: payload })
     toast.success(result.restarted ? 'Saved & restarted' : 'Saved')
@@ -97,7 +111,7 @@ onMounted(async () => {
   <div v-else class="space-y-6">
     <p v-if="liteMode" class="text-p-sm text-ink-gray-6">
       Lite mode runs one pool: the count is job threads in the bench process, shared by every
-      queue.
+      queue, and the longest timeout applies to every queue.
     </p>
 
     <div v-for="(group, index) in groups" :key="index" class="flex items-end gap-3">
@@ -109,6 +123,11 @@ onMounted(async () => {
       <div class="flex-1 space-y-1.5">
         <p v-if="index === 0" class="font-medium text-ink-gray-7">Queues</p>
         <TextInput v-model="group.queues" placeholder="default, short, long" class="w-full" />
+      </div>
+
+      <div class="space-y-1.5 w-36">
+        <p v-if="index === 0" class="font-medium text-ink-gray-7">Timeout (seconds)</p>
+        <TextInput v-model="group.timeout" type="number" min="1" placeholder="Default" class="w-full" />
       </div>
 
       <Button

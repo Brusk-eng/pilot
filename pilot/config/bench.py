@@ -32,7 +32,7 @@ from pilot.config.s3 import S3Config
 from pilot.config.schema import TomlSchema, field_names
 from pilot.config.telemetry import TelemetryConfig
 from pilot.config.waf import WafCondition, WafConfig, WafRule
-from pilot.config.worker import WorkerConfig, WorkerGroup
+from pilot.config.worker import WorkerConfig, WorkerGroup, parse_timeout
 from pilot.exceptions import ConfigError
 from pilot.internal.atomic_file import (
     atomic_write_private_text,
@@ -571,7 +571,11 @@ class BenchConfig:
         return redis
 
     def _workers_section(self) -> list[ConfigDict]:
-        return [{"queues": group.queues, "count": group.count} for group in self.workers.groups]
+        # TOML has no null, so an unset timeout is left out.
+        return [
+            {key: value for key, value in group.to_dict().items() if value is not None}
+            for group in self.workers.groups
+        ]
 
     def _production_section(self) -> ConfigDict:
         production: ConfigDict = {"enabled": self.production.enabled}
@@ -715,7 +719,7 @@ class BenchConfig:
         app = self.framework_app
         settings["app_repo"] = app.repo
         settings["app_branch"] = app.branch
-        settings["workers"] = [{"queues": list(g.queues), "count": g.count} for g in self.workers.groups]
+        settings["workers"] = [group.to_dict() for group in self.workers.groups]
         settings["production_process_manager"] = self.production.process_manager or "none"
         return settings
 
@@ -875,7 +879,13 @@ def _workers_to_groups(value) -> list[WorkerGroup]:
         queues = [str(q) for q in queues if str(q).strip()]
         if not queues:
             continue
-        groups.append(WorkerGroup(queues=queues, count=max(1, int(entry.get("count", 1)))))
+        groups.append(
+            WorkerGroup(
+                queues=queues,
+                count=max(1, int(entry.get("count", 1))),
+                timeout=parse_timeout(entry.get("timeout")),
+            )
+        )
     return groups or WorkerConfig().groups
 
 
