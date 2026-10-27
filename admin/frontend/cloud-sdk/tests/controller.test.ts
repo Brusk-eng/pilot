@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createCloudSettings } from '../src/controller.ts'
+import { getRuntimeUrl } from '../src/dialog.ts'
 import { isCloudSettingsAvailable } from '../src/context.ts'
 import { call, CloudSettingsError } from '../src/request.ts'
 
@@ -37,6 +38,21 @@ test('a failed UI load can be retried and unavailable context never loads it', a
   await assert.rejects(settings.openCloudSettings({ context: { enabled: true } }), /Failed to load/)
   await settings.openCloudSettings({ context: { enabled: true } })
   assert.equal(attempts, 2)
+})
+
+test('the UI loads from the runtime Pilot serves next to the Desk script', async () => {
+  const loaded: unknown[] = []
+  const context = { enabled: true, bundle: { js: 'https://pilot.example.test/embed/cloud-settings/cloud-settings.js?v=7' } }
+  const settings = createCloudSettings(async (given) => {
+    loaded.push(given)
+    return { mountCloudSettings: () => {}, closeCloudSettings: () => {} }
+  })
+
+  await settings.openCloudSettings({ context })
+
+  assert.deepEqual(loaded, [context])
+  assert.equal(getRuntimeUrl(context), 'https://pilot.example.test/embed/cloud-settings/esm/cloud-settings.js')
+  assert.throws(() => getRuntimeUrl({ enabled: true }), /not set up/)
 })
 
 test('availability distinguishes permission denial from a connection failure', async (context) => {
