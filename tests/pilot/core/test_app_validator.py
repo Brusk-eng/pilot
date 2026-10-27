@@ -313,6 +313,42 @@ def _make_hooks_app(tmp_path: Path, hooks: str, **extra_files: str) -> App:
     return _make_app(tmp_path, "myapp", '[project]\nname = "myapp"\n', files)
 
 
+def test_hook_validation_batches_modules_without_caching_between_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pilot.core.app.validator import hooks
+
+    app = _make_app(
+        tmp_path,
+        "myapp",
+        '[project]\nname = "myapp"\n',
+        {
+            "myapp/hooks.py": (
+                "after_install = 'myapp.handlers.first'\n"
+                "before_install = 'myapp.handlers.second'\n"
+                "after_migrate = 'myapp.lifecycle.run'\n"
+            ),
+            "myapp/handlers.py": "def first(): pass\ndef second(): pass\nraise RuntimeError()\n",
+            "myapp/lifecycle.py": "def run(): pass\n",
+        },
+    )
+    calls = []
+    original_run = hooks.run_in_bench
+
+    def run(*args):
+        calls.append(args)
+        return original_run(*args)
+
+    monkeypatch.setattr(hooks, "run_in_bench", run)
+    check = HooksCheck()
+    check.run(app)
+    assert len(calls) == 2
+    (app.path / "myapp" / "handlers.py").write_text("def first(): pass\n")
+    with pytest.raises(AppValidationError, match="'handlers' has no 'second'"):
+        check.run(app)
+    assert len(calls) == 4
+
+
 def test_hooks_passes_for_well_formed_hooks(tmp_path: Path) -> None:
     app = _make_hooks_app(
         tmp_path,
