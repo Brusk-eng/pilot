@@ -8,8 +8,14 @@ import pytest
 
 from pilot.config import BenchConfig, WorkerGroup
 from pilot.core.bench import Bench
+from pilot.internal.patch_state import is_applied
 from pilot.managers.processes.local import ProcessManager
-from pilot.patches.register_worker_queues import import_queue_timeouts, register_worker_queues, run
+from pilot.patches.register_worker_queues import (
+    PATCH_NAME,
+    import_queue_timeouts,
+    register_worker_queues,
+    run,
+)
 from tests.pilot.commands.test_commands import make_bench
 
 
@@ -81,10 +87,25 @@ def test_conflicting_hand_set_timeouts_are_not_imported(tmp_path: Path, capsys) 
         tmp_path, workers, {"workers": {"default": {"timeout": 600}, "long": {"timeout": 3000}}}
     )
 
-    import_queue_timeouts(bench_dir)
+    assert import_queue_timeouts(bench_dir) is False
 
     assert [group.timeout for group in BenchConfig.read(bench_dir).workers.groups] == [None, None]
     assert "set the worker timeouts in Settings again" in capsys.readouterr().out
+
+
+def test_a_timeout_conflict_leaves_the_bench_for_the_next_update(tmp_path: Path) -> None:
+    workers = '[[workers]]\nqueues = ["default"]\ncount = 1\n\n[[workers]]\nqueues = ["default", "long"]\ncount = 1\n'
+    bench_dir = _bench_dir(
+        tmp_path, workers, {"workers": {"default": {"timeout": 600}, "long": {"timeout": 3000}}}
+    )
+    config_path = bench_dir / "sites" / "common_site_config.json"
+    before = config_path.read_text()
+
+    run(tmp_path)
+
+    assert config_path.read_text() == before
+    assert [group.timeout for group in BenchConfig.read(bench_dir).workers.groups] == [None, None]
+    assert not is_applied(bench_dir, PATCH_NAME)
 
 
 @pytest.fixture

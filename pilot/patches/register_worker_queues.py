@@ -17,21 +17,24 @@ def run(benches_root: Path) -> None:
         if is_applied(bench_dir, PATCH_NAME):
             continue
         if (bench_dir / "sites" / "common_site_config.json").exists():
-            import_queue_timeouts(bench_dir)
+            # Keep the hand-set timeouts until Settings resolves the conflict.
+            if not import_queue_timeouts(bench_dir):
+                continue
             register_worker_queues(Bench(bench_dir))
         mark_applied(bench_dir, PATCH_NAME)
 
 
-def import_queue_timeouts(bench_dir: Path) -> None:
+def import_queue_timeouts(bench_dir: Path) -> bool:
     """bench.toml owns the queue timeouts now, so carry over the ones set by hand.
-    A group keeps one timeout, so it takes the longest of its queues, counting Frappe's default for the rest."""
+    A group keeps one timeout, so it takes the longest of its queues, counting Frappe's default for the rest.
+    False when they conflict, and none are carried over."""
     from pilot.config import BenchConfig
     from pilot.config.common_site_config import read_common_site_config
     from pilot.exceptions import ConfigError
 
     entries = read_common_site_config(bench_dir / "sites").get("workers")
     if not isinstance(entries, dict):
-        return
+        return True
     with BenchConfig.open(bench_dir) as config:
         groups = config.workers.groups
         before = [group.timeout for group in groups]
@@ -44,6 +47,8 @@ def import_queue_timeouts(bench_dir: Path) -> None:
             for group, timeout in zip(groups, before, strict=True):
                 group.timeout = timeout
             print(f"{bench_dir.name}: set the worker timeouts in Settings again ({error})")
+            return False
+    return True
 
 
 def get_imported_timeout(bench_dir: Path, entries: dict, queues: list[str]) -> int | None:
