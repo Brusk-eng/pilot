@@ -292,16 +292,19 @@ class BenchConfig:
         if not self.python_version:
             raise ConfigError("bench.python is required and must not be empty.")
         for app in self.apps:
-            if app.is_linked:
-                if not app.name:
-                    raise ConfigError(f"Linked app at '{app.path}' must have a name.")
-                continue
-            if not app.name or not app.repo or not app.branch:
-                raise ConfigError(f"App '{app.name or '(unnamed)'}' must have name, repo, and branch.")
-            if app.branches and app.branch not in app.branches:
-                raise ConfigError(
-                    f"App '{app.name}': active branch '{app.branch}' is not listed in branches {app.branches}."
-                )
+            self._validate_app(app)
+
+    def _validate_app(self, app: AppConfig) -> None:
+        if app.is_linked:
+            if not app.name:
+                raise ConfigError(f"Linked app at '{app.path}' must have a name.")
+            return
+        if not app.name or not app.repo or not app.branch:
+            raise ConfigError(f"App '{app.name or '(unnamed)'}' must have name, repo, and branch.")
+        if app.branches and app.branch not in app.branches:
+            raise ConfigError(
+                f"App '{app.name}': active branch '{app.branch}' is not listed in branches {app.branches}."
+            )
 
     def _validate_bench_name(self) -> None:
         if not _BENCH_NAME_PATTERN.match(self.name):
