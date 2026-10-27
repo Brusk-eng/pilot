@@ -48,12 +48,19 @@ class Workspace:
 
     @cached_property
     def app_name(self) -> str:
-        """The app's importable package name, read from pyproject.toml."""
-        try:
-            project = tomllib.loads((self.root / "pyproject.toml").read_text()).get("project", {})
-        except (OSError, tomllib.TOMLDecodeError):
+        """The app's importable package name: the project name in pyproject.toml,
+        or else the only package next to pyproject.toml that holds a hooks.py."""
+        pyproject = self.root / "pyproject.toml"
+        if not pyproject.is_file():
             return ""
-        return str(project.get("name", "")).replace("-", "_")
+        try:
+            project = tomllib.loads(pyproject.read_text()).get("project", {})
+        except (OSError, tomllib.TOMLDecodeError):
+            project = {}
+        if name := project.get("name"):
+            return str(name).replace("-", "_")
+        packages = [hooks.parent.name for hooks in self.root.glob("*/hooks.py")]
+        return packages[0] if len(packages) == 1 else ""
 
     @property
     def is_frappe_app(self) -> bool:

@@ -89,6 +89,21 @@ def test_workspace_is_found_from_inside_the_repository(tmp_path: Path, benches: 
     assert Workspace.find(tmp_path) is None
 
 
+def test_an_app_without_a_project_name_is_named_after_its_hooks_package(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path / "gameplan-repo")
+    (repo / "pyproject.toml").write_text("[build-system]\nrequires = []\n")
+
+    workspace = Workspace.find(repo)
+
+    assert workspace is not None
+    assert workspace.app_name == "gameplan"
+    (repo / "pyproject.toml").write_text("[project\n")
+    assert Workspace(repo).app_name == "gameplan"
+    (repo / "crm").mkdir()
+    (repo / "crm" / "hooks.py").write_text("")
+    assert Workspace.find(repo) is None
+
+
 def test_the_bench_recorded_in_the_git_directory_is_looked_up_first(tmp_path: Path, benches: Path) -> None:
     repo = make_repo(tmp_path / "gameplan")
     bench = make_linked_bench(benches / "dev-gameplan", repo)
