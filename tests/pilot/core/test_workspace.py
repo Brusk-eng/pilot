@@ -420,7 +420,7 @@ def test_a_second_checkout_gets_its_own_bench(tmp_path: Path, benches: Path) -> 
 
     workspace = Workspace(make_repo(tmp_path / "gameplan"))
 
-    assert workspace.new_bench_name() == "dev-gameplan-2"
+    assert workspace.next_bench_name == "dev-gameplan-2"
 
 
 def test_linked_app_is_a_symlink_whose_git_state_pilot_never_touches(tmp_path: Path) -> None:
