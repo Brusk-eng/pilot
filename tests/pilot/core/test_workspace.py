@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 from unittest.mock import patch
@@ -326,6 +327,26 @@ def test_start_and_drop_wait_for_the_bench_to_stop(tmp_path: Path, benches: Path
         workspace.drop()
 
     assert not (repo / ".git" / "pilot-bench").exists()
+
+
+def test_a_broken_git_link_leaves_the_working_tree_untouched(tmp_path: Path, benches: Path) -> None:
+    repo = make_repo(tmp_path / "gameplan")
+    shutil.rmtree(repo / ".git")
+    (repo / ".git").write_text(f"gitdir: {tmp_path / 'missing'}\n")
+    (repo / "pilot-bench").write_text("the developer's own file\n")
+    workspace = Workspace(repo)
+
+    with (
+        patch.object(Bench, "initialize", autospec=True, side_effect=fake_initialize),
+        patch.object(PythonEnvManager, "install_app"),
+        patch.object(Site, "provision", side_effect=fake_provision),
+    ):
+        workspace.setup()
+    with patch.object(Site, "drop"), patch.object(Bench, "drop"):
+        workspace.drop()
+
+    assert workspace.bench_record is None
+    assert (repo / "pilot-bench").read_text() == "the developer's own file\n"
 
 
 def test_a_second_checkout_gets_its_own_bench(tmp_path: Path, benches: Path) -> None:

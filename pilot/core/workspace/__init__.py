@@ -103,7 +103,10 @@ class Workspace:
         from pilot.internal.git import GitRepo
 
         repo = GitRepo(self.root)
-        return repo.git_dir / "pilot-bench" if repo.is_cloned else None
+        if not repo.is_cloned:
+            return None
+        git_dir = repo.git_dir
+        return git_dir / "pilot-bench" if git_dir.is_absolute() else None
 
     @property
     def recorded_bench_name(self) -> str:
