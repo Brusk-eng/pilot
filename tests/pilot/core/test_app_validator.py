@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -909,6 +910,42 @@ def test_import_check_skips_the_throwaway_venv_when_everything_resolves(monkeypa
 
     monkeypatch.setattr("pilot.core.app.validator.utils.tmp_env.TmpEnv.create", fail)
     ImportCheck().run(app)
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    os.environ.get("PILOT_TEST_PACKAGE_INSTALLS") != "1",
+    reason="Set PILOT_TEST_PACKAGE_INSTALLS=1 to run real uv package installs",
+)
+def test_validation_env_reuses_framework_source_but_packages_app(tmp_path: Path) -> None:
+    from pilot.core.app.validator.utils.tmp_env import TmpEnv
+
+    _make_fake_frappe(tmp_path)
+    framework = tmp_path / "apps" / "frappe" / "frappe" / "__init__.py"
+    framework.write_text("value = 'before'\n")
+    app = _make_app(
+        tmp_path,
+        "myapp",
+        '[project]\nname = "myapp"\nversion = "0.0.1"\ndependencies = ["frappe"]\n'
+        + _SETUPTOOLS_BUILD,
+        {"myapp/__init__.py": "value = 'before'\n"},
+    )
+    env = TmpEnv()
+    try:
+        env.create(app.bench)
+        env.install_app(app)
+        framework.write_text("value = 'after'\n")
+        (app.path / "myapp" / "__init__.py").write_text("value = 'after'\n")
+        result = subprocess.run(
+            [str(env.python), "-c", "import frappe, myapp; print(frappe.value, myapp.value)"],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert result.stdout.strip() == "after before"
+    finally:
+        env.delete()
 
 
 def test_validation_env_installs_uv_when_the_host_has_none(monkeypatch, tmp_path: Path) -> None:
