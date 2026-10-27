@@ -102,7 +102,7 @@ class Workspace:
         from pilot.config import BenchConfig
 
         toml_path = bench_root / "bench.toml"
-        return toml_path.exists() and self.root in BenchConfig.get_linked_app_paths(toml_path)
+        return toml_path.exists() and self.root in BenchConfig.get_linked_app_paths(bench_root)
 
     @cached_property
     def bench_record(self) -> Path | None:
