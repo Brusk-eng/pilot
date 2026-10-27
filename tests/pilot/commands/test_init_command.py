@@ -275,3 +275,32 @@ def test_init_builds_the_framework_assets(tmp_path: Path) -> None:
 
     built_app = python_env_manager.return_value.build_assets_for_app.call_args.args[0]
     assert built_app.config.name == bench.config.framework_app.name
+
+
+@pytest.mark.parametrize("admin_enabled", [True, False])
+def test_init_prepares_the_admin_frontend_only_for_an_enabled_admin(tmp_path: Path, admin_enabled: bool) -> None:
+    bench = make_bench(tmp_path)
+    bench.config.admin.enabled = admin_enabled
+    initializer = BenchInitializer(bench)
+    steps = [
+        "_ensure_admin_password",
+        "_ensure_database_credentials",
+        "_install_system_packages",
+        "_create_bench_structure",
+        "_create_virtualenv",
+        "_install_framework_apps",
+        "_build_framework_assets",
+        "_configure_redis",
+        "_ensure_admin_frontend",
+        "_generate_process_config",
+    ]
+    mocks = {step: MagicMock() for step in steps}
+    with (
+        patch.multiple(initializer, **mocks),
+        patch.object(bench.config, "validate"),
+        patch("pilot.managers.environment.PythonEnvManager"),
+    ):
+        initializer._run_steps(lambda message: None)
+
+    assert mocks["_ensure_admin_frontend"].called is admin_enabled
+    mocks["_generate_process_config"].assert_called_once()
