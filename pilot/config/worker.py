@@ -53,11 +53,6 @@ class WorkerConfig:
         return list(dict.fromkeys(queue for group in self.groups for queue in group.queues))
 
     @property
-    def custom_queues(self) -> list[str]:
-        """Queues Frappe does not define itself."""
-        return [queue for queue in self.queues if queue not in FRAPPE_QUEUES]
-
-    @property
     def queue_timeouts(self) -> dict[str, int]:
         """The job timeout of each queue that a group sets one for."""
         return {queue: group.timeout for group in self.groups if group.timeout for queue in group.queues}

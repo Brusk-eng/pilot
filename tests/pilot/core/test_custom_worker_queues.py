@@ -27,12 +27,6 @@ def _workers(bench) -> dict | None:
     return json.loads((bench.sites_path / "common_site_config.json").read_text()).get("workers")
 
 
-def test_custom_queues_skip_the_frappe_queues(tmp_path: Path) -> None:
-    bench = _bench(tmp_path, WorkerGroup(queues=["guard-review", "default"], count=1))
-
-    assert bench.config.workers.custom_queues == ["guard-review"]
-
-
 def test_frappe_learns_the_custom_queues_and_their_timeouts(tmp_path: Path) -> None:
     bench = _bench(
         tmp_path,
