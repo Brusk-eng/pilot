@@ -310,6 +310,29 @@ test('Razorpay needs a phone number before it opens', async ({ page }) => {
   expect(calls.some((call) => call.method === 'add_payment_method')).toBe(false)
 })
 
+test('a card that fails verification says so and offers a fresh start', async ({ page }) => {
+  await openBilling(page, {
+    get_billing: () => ({ message: billing() }),
+    get_account_url: accountLinks,
+    get_payment_gateways: stripeOnly,
+    create_payment_method_checkout: () => ({ message: { checkout_url: 'https://checkout.example.test/1', reference: 'ref-1' } }),
+    confirm_payment_method_checkout: () => ({
+      message: { status: 'Failed', active: false, message: 'We could not verify this card. Try another card.' },
+    }),
+  })
+  await page.evaluate(() => {
+    window.open = () => null
+  })
+
+  await page.getByRole('button', { name: 'Add payment method' }).click()
+  await page.getByRole('button', { name: 'Continue with Stripe' }).click()
+  await page.getByRole('button', { name: 'Check status' }).click()
+
+  await expect(page.getByText('We could not verify this card. Try another card.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Check status' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Continue with Stripe' })).toBeEnabled()
+})
+
 test('a payment method that converts the trial closes the payment step', async ({ page }) => {
   let converted = false
   await openBilling(page, {
