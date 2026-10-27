@@ -81,7 +81,8 @@ const noCurrencies = computed(() => loaded.value && !currencies.value.length)
 // The gateway follows the currency, so suggest the one that fits the country until the customer picks one.
 const currencyTouched = ref(false)
 watch(() => form.country, (country) => {
-  if (isIndia.value && indiaStates.value.length && !indiaStates.value.includes(form.state)) form.state = ''
+  // An Indian state is valid only for India, and India accepts only a listed state.
+  if (indiaStates.value.length && indiaStates.value.includes(form.state) !== isIndia.value) form.state = ''
 
   if (currencyTouched.value || !country.trim()) return
   const suggested = isIndia.value ? 'INR' : 'USD'

@@ -152,6 +152,13 @@ test('with lists from Central, country and an Indian state are picked from dropd
   await page.getByRole('option', { name: 'India', exact: true }).click()
   await page.getByLabel('State').click()
   await page.getByRole('option', { name: 'Karnataka', exact: true }).click()
+  await page.getByLabel('Country').click()
+  await page.getByRole('option', { name: 'United States', exact: true }).click()
+  await expect(page.getByLabel('State')).toHaveValue('')
+  await page.getByLabel('Country').click()
+  await page.getByRole('option', { name: 'India', exact: true }).click()
+  await page.getByLabel('State').click()
+  await page.getByRole('option', { name: 'Karnataka', exact: true }).click()
   await page.getByRole('button', { name: 'Continue', exact: true }).click()
 
   await expect(page.getByText('Step 2 of 2')).toBeVisible()
