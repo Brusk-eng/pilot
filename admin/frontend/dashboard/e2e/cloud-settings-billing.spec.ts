@@ -133,6 +133,41 @@ test('India asks for the state and offers GSTIN', async ({ page }) => {
   await expect(page.getByRole('textbox', { name: 'State (required)', exact: true })).toBeVisible()
 })
 
+test('with lists from Central, country and an Indian state are picked from dropdowns', async ({ page }) => {
+  const calls = await openBilling(page, {
+    get_billing: () => ({ message: billing({ profileComplete: false }) }),
+    get_account_url: accountLinks,
+    get_billing_profile: () => ({
+      message: { ...emptyProfile().message, countries: ['India', 'United States'], india_states: ['Karnataka', 'Maharashtra'] },
+    }),
+    save_billing_profile: () => ({ message: { saved: true } }),
+    get_payment_gateways: stripeOnly,
+  })
+
+  await page.getByRole('button', { name: 'Add payment method' }).click()
+  await page.getByLabel('Legal name').fill('Acme Pvt Ltd')
+  await page.getByLabel('Address').fill('1 MG Road')
+  await page.getByLabel('City').fill('Bengaluru')
+  await page.getByLabel('Country').click()
+  await page.getByRole('option', { name: 'India', exact: true }).click()
+  await page.getByLabel('State').click()
+  await page.getByRole('option', { name: 'Karnataka', exact: true }).click()
+  await page.getByLabel('Country').click()
+  await page.getByRole('option', { name: 'United States', exact: true }).click()
+  await expect(page.getByLabel('State')).toHaveValue('')
+  await page.getByLabel('Country').click()
+  await page.getByRole('option', { name: 'India', exact: true }).click()
+  await page.getByLabel('State').click()
+  await page.getByRole('option', { name: 'Karnataka', exact: true }).click()
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+
+  await expect(page.getByText('Step 2 of 2')).toBeVisible()
+  const saved = calls.find((call) => call.method === 'save_billing_profile')?.form
+  expect(saved?.get('country')).toBe('India')
+  expect(saved?.get('state')).toBe('Karnataka')
+  expect(saved?.get('currency')).toBe('INR')
+})
+
 test('a paid site moves to a bigger plan and opens the progress page', async ({ page }) => {
   const calls = await openBilling(page, {
     get_billing: () => ({ message: billing({ onTrial: null, hasCard: true }) }),
@@ -238,7 +273,7 @@ test('India requires the state, and a currency the owner picks stays', async ({ 
   await page.getByLabel('Country').fill('India')
   await page.getByRole('button', { name: 'Continue', exact: true }).click()
 
-  await expect(page.getByText('Enter your state. GST needs it.')).toBeVisible()
+  await expect(page.getByText('Choose your state. GST needs it.')).toBeVisible()
   await expect(page.getByLabel('Currency')).toContainText('USD')
   expect(calls.some((call) => call.method === 'save_billing_profile')).toBe(false)
 })
@@ -308,6 +343,44 @@ test('Razorpay needs a phone number before it opens', async ({ page }) => {
 
   await expect(page.getByText('Enter a phone number. Razorpay needs it to save a card.')).toBeVisible()
   expect(calls.some((call) => call.method === 'add_payment_method')).toBe(false)
+})
+
+test('a card that Central activates on return shows without Check status', async ({ page }) => {
+  let reconciled = false
+  await openBilling(page, {
+    get_billing: () => ({ message: reconciled ? billing({ onTrial: null, hasCard: true }) : billing() }),
+    get_account_url: accountLinks,
+    reconcile_payment_setup: () => {
+      reconciled = true
+      return { message: { activated: 1 } }
+    },
+  })
+
+  await expect(page.getByText('Visa •••• 4242')).toBeVisible()
+  await expect(page.getByText(/Cannot read properties/)).toHaveCount(0)
+})
+
+test('a card that fails verification says so and offers a fresh start', async ({ page }) => {
+  await openBilling(page, {
+    get_billing: () => ({ message: billing() }),
+    get_account_url: accountLinks,
+    get_payment_gateways: stripeOnly,
+    create_payment_method_checkout: () => ({ message: { checkout_url: 'https://checkout.example.test/1', reference: 'ref-1' } }),
+    confirm_payment_method_checkout: () => ({
+      message: { status: 'Failed', active: false, message: 'We could not verify this card. Try another card.' },
+    }),
+  })
+  await page.evaluate(() => {
+    window.open = () => null
+  })
+
+  await page.getByRole('button', { name: 'Add payment method' }).click()
+  await page.getByRole('button', { name: 'Continue with Stripe' }).click()
+  await page.getByRole('button', { name: 'Check status' }).click()
+
+  await expect(page.getByText('We could not verify this card. Try another card.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Check status' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Continue with Stripe' })).toBeEnabled()
 })
 
 test('a payment method that converts the trial closes the payment step', async ({ page }) => {
