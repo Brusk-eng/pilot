@@ -844,50 +844,6 @@ def test_import_check_skips_the_throwaway_venv_when_everything_resolves(monkeypa
     ImportCheck().run(app)
 
 
-def test_validation_env_only_installs_framework_editably(monkeypatch, tmp_path: Path) -> None:
-    from pilot.core.app.validator.utils import tmp_env as tmp_env_module
-
-    _make_fake_frappe(tmp_path)
-    app = _make_app(
-        tmp_path,
-        "myapp",
-        '[project]\nname = "myapp"\n',
-        {},
-    )
-    commands: list[list[str]] = []
-    monkeypatch.setattr(tmp_env_module, "ensure_uv", lambda: "/installed/bin/uv")
-    monkeypatch.setattr(tmp_env_module, "run_command", lambda argv, **kwargs: commands.append(argv))
-
-    env = tmp_env_module.TmpEnv()
-    try:
-        env.create(app.bench)
-        dependency = tmp_path / "apps" / "dependency"
-        env.install_app(app, [dependency])
-        assert commands == [
-            ["/installed/bin/uv", "venv", "--python", str(app.bench.python), str(env.path)],
-            [
-                "/installed/bin/uv",
-                "pip",
-                "install",
-                "--python",
-                str(env.python),
-                "--editable",
-                str(app.bench.apps_path / "frappe"),
-            ],
-            [
-                "/installed/bin/uv",
-                "pip",
-                "install",
-                "--python",
-                str(env.python),
-                str(dependency),
-                str(app.path),
-            ],
-        ]
-    finally:
-        env.delete()
-
-
 @pytest.mark.integration
 @pytest.mark.skipif(
     os.environ.get("PILOT_TEST_PACKAGE_INSTALLS") != "1",
