@@ -5,7 +5,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 import pytest
 
@@ -177,7 +177,7 @@ def test_setup_creates_a_linked_bench_and_reruns_only_sync_it(tmp_path: Path, be
     assert json.loads((site.path / "site_config.json").read_text()) == {"developer_mode": 1}
     common_site_config = json.loads((bench.sites_path / "common_site_config.json").read_text())
     assert common_site_config["default_site"] == "dev-gameplan.localhost"
-    initialize.assert_called_once()
+    initialize.assert_called_once_with(bench, on_progress=ANY)
     provision.assert_called_once()
     install_requirements.assert_called_once()
     install_app.assert_not_called()
@@ -234,7 +234,7 @@ def test_setup_resumes_an_interrupted_initialization(tmp_path: Path, benches: Pa
     ):
         workspace.setup()
 
-    initialize.assert_called_once()
+    initialize.assert_called_once_with(workspace.bench, on_progress=ANY)
     assert workspace.site.exists
 
 
