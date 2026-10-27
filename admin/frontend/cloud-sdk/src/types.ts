@@ -84,6 +84,10 @@ export interface BillingProfile {
   pincode: string
   gstin: string
   supported_currencies?: (string | { label: string; value: string })[]
+  /** Country names the address form picks from. */
+  countries?: string[]
+  /** India's GST state names, the only state list Central checks. */
+  india_states?: string[]
 }
 
 export interface PaymentGateway {

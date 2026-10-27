@@ -133,6 +133,34 @@ test('India asks for the state and offers GSTIN', async ({ page }) => {
   await expect(page.getByRole('textbox', { name: 'State (required)', exact: true })).toBeVisible()
 })
 
+test('with lists from Central, country and an Indian state are picked from dropdowns', async ({ page }) => {
+  const calls = await openBilling(page, {
+    get_billing: () => ({ message: billing({ profileComplete: false }) }),
+    get_account_url: accountLinks,
+    get_billing_profile: () => ({
+      message: { ...emptyProfile().message, countries: ['India', 'United States'], india_states: ['Karnataka', 'Maharashtra'] },
+    }),
+    save_billing_profile: () => ({ message: { saved: true } }),
+    get_payment_gateways: stripeOnly,
+  })
+
+  await page.getByRole('button', { name: 'Add payment method' }).click()
+  await page.getByLabel('Legal name').fill('Acme Pvt Ltd')
+  await page.getByLabel('Address').fill('1 MG Road')
+  await page.getByLabel('City').fill('Bengaluru')
+  await page.getByLabel('Country').click()
+  await page.getByRole('option', { name: 'India', exact: true }).click()
+  await page.getByLabel('State').click()
+  await page.getByRole('option', { name: 'Karnataka', exact: true }).click()
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+
+  await expect(page.getByText('Step 2 of 2')).toBeVisible()
+  const saved = calls.find((call) => call.method === 'save_billing_profile')?.form
+  expect(saved?.get('country')).toBe('India')
+  expect(saved?.get('state')).toBe('Karnataka')
+  expect(saved?.get('currency')).toBe('INR')
+})
+
 test('a paid site moves to a bigger plan and opens the progress page', async ({ page }) => {
   const calls = await openBilling(page, {
     get_billing: () => ({ message: billing({ onTrial: null, hasCard: true }) }),
@@ -238,7 +266,7 @@ test('India requires the state, and a currency the owner picks stays', async ({ 
   await page.getByLabel('Country').fill('India')
   await page.getByRole('button', { name: 'Continue', exact: true }).click()
 
-  await expect(page.getByText('Enter your state. GST needs it.')).toBeVisible()
+  await expect(page.getByText('Choose your state. GST needs it.')).toBeVisible()
   await expect(page.getByLabel('Currency')).toContainText('USD')
   expect(calls.some((call) => call.method === 'save_billing_profile')).toBe(false)
 })
