@@ -17,6 +17,7 @@ from pilot.core.site.provisioning import SiteProvisioner
 from pilot.core.workspace import Workspace
 from pilot.exceptions import BenchError, ConfigError
 from pilot.internal.cli.dispatch import CliContext, find_bench_root
+from pilot.internal.patch_state import is_applied
 from pilot.managers.environment import PythonEnvManager
 from pilot.managers.redis import RedisManager
 from tests.pilot.commands.test_commands import make_bench
@@ -181,6 +182,7 @@ def test_setup_creates_a_linked_bench_and_reruns_only_sync_it(tmp_path: Path, be
     initialize.assert_called_once_with(bench, on_progress=ANY)
     provision.assert_called_once()
     assert provision.call_args.kwargs["schedule_backups"] is False
+    assert is_applied(bench.path, "enroll_sites_in_scheduled_backups")
     install_requirements.assert_called_once()
     install_app.assert_not_called()
     migrate.assert_called_once()

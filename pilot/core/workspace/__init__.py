@@ -231,9 +231,13 @@ class Workspace:
         app.install_linked()
 
     def create_site(self, on_progress: Callable[[str], None]) -> "Site":
+        """Create the dev site without scheduled backups. The bench is marked as enrolled
+        already, so a later `pilot update` does not add them."""
         from pilot.core.site import Site
+        from pilot.internal.patch_state import mark_applied
+        from pilot.patches.enroll_sites_in_scheduled_backups import PATCH_NAME
 
-        return Site.provision(
+        site = Site.provision(
             self.bench,
             self.site.config.name,
             [self.app_name],
@@ -241,6 +245,8 @@ class Workspace:
             on_progress=on_progress,
             schedule_backups=False,
         )
+        mark_applied(self.bench.path, PATCH_NAME)
+        return site
 
     def configure_site(self) -> None:
         """Turn on developer mode, and make this the site that Frappe commands
