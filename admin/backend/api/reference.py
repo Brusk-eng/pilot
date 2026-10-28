@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import inspect
 import re
+import sys
 from collections import defaultdict
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from admin.backend.api.routes import API_V1_PREFIX
@@ -47,3 +49,7 @@ def _row(rule: Rule, path: str, view) -> str:
     )
     description = (inspect.getdoc(view) or "").split("\n\n")[0].replace("\n", " ").replace("|", "\\|")
     return f"| {methods} | `{path}` | {parameters} | {description} |"
+
+
+if __name__ == "__main__":
+    Path(sys.argv[1]).write_text(get_api_reference(), encoding="utf-8")

@@ -14,12 +14,19 @@ class ApiReferenceCommand(Command):
     help: ClassVar[str] = "Write the Admin API reference from the routes."
     bench_mode: ClassVar[BenchMode] = BenchMode.NONE
 
-    output: Annotated[str, Arg(help="Markdown file to write (default: docs/admin-api-reference.md).")] = (
-        "docs/admin-api-reference.md"
-    )
+    output: Annotated[
+        str | None, Arg(help="Markdown file to write (default: docs/admin-api-reference.md).")
+    ] = None
 
     def run(self) -> None:
-        from admin.backend.api.reference import get_api_reference
+        from pilot.managers.environment import AdminEnvManager
+        from pilot.utils import cli_root, run_command
 
-        Path(self.output).write_text(get_api_reference(), encoding="utf-8")
-        self.report(f"Wrote {self.output}")
+        output = (
+            Path(self.output).resolve() if self.output else cli_root() / "docs" / "admin-api-reference.md"
+        )
+        # The routes need Flask, which only the admin venv has.
+        admin = AdminEnvManager(cli_root())
+        admin.install_python_deps()
+        run_command([str(admin.python), "-m", "admin.backend.api.reference", str(output)], cwd=cli_root())
+        self.report(f"Wrote {output}")
