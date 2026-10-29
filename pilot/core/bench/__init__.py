@@ -404,6 +404,7 @@ class Bench:
         old_firewall: dict,
         old_waf: dict,
         old_s3_config: dict,
+        old_proxy: dict,
     ) -> tuple[bool, str | None]:
         from pilot.core.bench.settings import BenchSettings
 
@@ -412,7 +413,13 @@ class Bench:
             old_firewall,
             old_waf,
             old_s3_config,
+            old_proxy,
         )
+
+    def get_cloudflare_status(self) -> dict:
+        from pilot.core.bench.settings import BenchSettings
+
+        return BenchSettings(self).get_cloudflare_status()
 
     def restart_processes(self) -> None:
         from pilot.core.bench.production import BenchProduction
