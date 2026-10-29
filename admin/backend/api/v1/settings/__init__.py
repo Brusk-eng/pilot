@@ -231,6 +231,7 @@ def get_settings():
 
 @settings_bp.get("/cloudflare")
 def get_cloudflare_status():
+    """Whether an edge proxy fronts the host, and which site domains resolve to Cloudflare."""
     from pilot.exceptions import DomainProviderError
 
     try:
