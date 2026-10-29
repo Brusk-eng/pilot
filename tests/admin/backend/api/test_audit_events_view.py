@@ -113,7 +113,18 @@ def test_export_downloads_filtered_events_as_csv(tmp_path: Path) -> None:
     client = _client(bench_root)
     log = AuditLog(Bench(bench_root))
     log.append(
-        "backup", {"site": "a.test", "event": "backup", "status": "failed", "files": {"db": "x.sql.gz"}}
+        "backup",
+        {
+            "logged_at": "2026-10-27T09:21:56.999780+00:00",
+            "site": "a.test",
+            "event": "backup",
+            "status": "success",
+            "timestamp": "20261027_145156",
+            "with_files": True,
+            "offsite": False,
+            "files": {"database.sql.gz": 270117, "files.tar": 1536},
+            "pruned": [],
+        },
     )
     log.append("ssh_key", {"event": "added"})
 
@@ -123,9 +134,10 @@ def test_export_downloads_filtered_events_as_csv(tmp_path: Path) -> None:
     assert response.status_code == 200
     assert response.headers["Content-Disposition"] == 'attachment; filename="a.test-activity-log.csv"'
     assert lines[0] == "logged_at,type,event,site,app,status,actor,ip,command,task_id,details"
-    assert len(lines) == 2
-    assert ",backup,backup,a.test,,failed," in lines[1]
-    assert '""files"": {""db"": ""x.sql.gz""}' in lines[1]
+    assert lines[1:] == [
+        "2026-10-27 09:21:56,backup,backup,a.test,,success,,,,,"
+        '"timestamp=20261027_145156; with_files=True; offsite=False; files={""database.sql.gz"":270117,""files.tar"":1536}; pruned=[]"'
+    ]
 
 
 def test_export_keeps_only_events_inside_the_date_range(tmp_path: Path) -> None:

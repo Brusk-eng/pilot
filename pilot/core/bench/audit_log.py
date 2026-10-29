@@ -7,7 +7,7 @@ import io
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 from pilot.internal.jsonl_log import JsonlLog, utc_now
 
@@ -47,6 +47,22 @@ class AuditEntry:
 
 
 CSV_COLUMNS = ("logged_at", "type", "event", "site", "app", "status", "actor", "ip", "command", "task_id")
+
+
+def get_csv_row(record: dict) -> list[str]:
+    """One audit record as a CSV row: `CSV_COLUMNS`, then the remaining fields as `key=value` details."""
+    logged_at = datetime.fromisoformat(record["logged_at"]).astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")
+    details = {
+        key: value for key, value in record.items() if key not in CSV_COLUMNS and value not in (None, "")
+    }
+    return [
+        logged_at,
+        *(record.get(column) or "" for column in CSV_COLUMNS[1:]),
+        "; ".join(
+            f"{key}={json.dumps(value, separators=(',', ':')) if isinstance(value, dict | list) else value}"
+            for key, value in details.items()
+        ),
+    ]
 
 
 # Extra fields merged into every audit entry. The admin backend registers a provider that
@@ -99,15 +115,11 @@ class AuditLog:
         return matched
 
     def get_csv(self, **filters) -> str:
-        """Matching records newest first as CSV; fields outside the main columns go in `details` as JSON."""
+        """Matching records newest first as CSV; remaining fields go in `details` as `key=value` pairs."""
         output = io.StringIO()
         writer = csv.writer(output)
         writer.writerow([*CSV_COLUMNS, "details"])
-        for record in self.entries(**filters):
-            details = {key: value for key, value in record.items() if key not in CSV_COLUMNS}
-            writer.writerow(
-                [*(record.get(column, "") for column in CSV_COLUMNS), json.dumps(details) if details else ""]
-            )
+        writer.writerows(get_csv_row(record) for record in self.entries(**filters))
         return output.getvalue()
 
     @staticmethod
