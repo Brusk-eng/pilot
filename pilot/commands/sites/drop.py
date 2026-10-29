@@ -4,8 +4,9 @@ import argparse
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated, ClassVar
 
-from pilot.commands import Arg, Command
+from pilot.commands import Arg, BenchMode, Command
 from pilot.exceptions import BenchError
+from pilot.internal.tasks.store import TaskStore
 
 if TYPE_CHECKING:
     from pilot.core.bench import Bench
@@ -15,14 +16,21 @@ if TYPE_CHECKING:
 class DropSiteCommand(Command):
     name: ClassVar[str] = "drop-site"
     help: ClassVar[str] = "Drop a site, and remove it from bench.toml, nginx and the backup schedule."
+    bench_mode: ClassVar[BenchMode] = BenchMode.EXPLICIT
 
     site_name: Annotated[str, Arg(help="Site name.", metavar="site")]
     no_backup: Annotated[bool, Arg(help="Drop without the backup Frappe takes first.")] = False
     force: Annotated[bool, Arg(help="Drop even when Frappe hits an error, such as a failed backup.")] = False
     archived_sites_path: Annotated[str | None, Arg(help="Folder that receives the archived site.")] = None
+    skip_confirm: bool = False
 
     def run(self) -> None:
-        self.bench.site(self.site_name).drop(
+        site = self.bench.site(self.site_name)
+        if not site.exists:
+            raise BenchError(f"Site '{self.site_name}' does not exist in this bench.")
+        TaskStore(self.bench.path).ensure_resource_free(f"site:{self.site_name.lower()}")
+        self.confirm(f"Permanently delete site '{self.site_name}'?", skip=self.skip_confirm)
+        site.drop(
             on_progress=self.report,
             no_backup=self.no_backup,
             force=self.force,
@@ -58,6 +66,7 @@ class DropSiteCommand(Command):
             no_backup=parsed.no_backup,
             force=parsed.force,
             archived_sites_path=parsed.archived_sites_path,
+            skip_confirm=True,
         )
         if parsed.db_root_username or parsed.db_root_password:
             command.report("Pilot drops the site with the bench's own database credentials.")

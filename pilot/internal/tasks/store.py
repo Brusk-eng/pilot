@@ -215,6 +215,10 @@ class TaskStore:
         with exclusive_file_lock(self._lock_target):
             yield
 
+    def ensure_resource_free(self, resource_key: str) -> None:
+        with self.locked():
+            self._reject_active_resource_locked([resource_key])
+
     def _create_queued_locked(
         self,
         metadata: Mapping[str, object],
