@@ -101,13 +101,12 @@ class BenchSettings:
 
     def _apply_nginx_if_needed(self, old_firewall: dict, old_waf: dict, old_proxy: dict) -> str | None:
         waf_changed = waf_payload(self.bench.config) != old_waf
+        proxy_changed = proxy_payload(self.bench.config) != old_proxy
+        if proxy_changed:
+            self._apply_nginx_to_host()
         if not self.bench.config.production.enabled:
             return None
-        if (
-            firewall_payload(self.bench.config) == old_firewall
-            and proxy_payload(self.bench.config) == old_proxy
-            and not waf_changed
-        ):
+        if firewall_payload(self.bench.config) == old_firewall and not waf_changed:
             return None
 
         warning = None
@@ -116,12 +115,23 @@ class BenchSettings:
                 "ModSecurity is not installed on this host. Redeploy production to "
                 "install the WAF; it stays inactive until then."
             )
-        self._apply_nginx()
+        if not proxy_changed:
+            self._apply_nginx()
         return warning
 
-    def _apply_nginx(self) -> None:
+    def _apply_nginx_to_host(self) -> None:
+        """Re-render every production bench, since the proxy settings are host-wide."""
+        from pilot.core.bench import Bench
+        from pilot.utils import iter_sibling_benches
+
+        siblings = [Bench(config, path) for path, config in iter_sibling_benches(self.bench.path)]
+        for bench in [self.bench, *siblings]:
+            if bench.config.production.enabled:
+                self._apply_nginx(bench)
+
+    def _apply_nginx(self, bench: "Bench | None" = None) -> None:
         try:
-            regenerate_nginx(self.bench)
+            regenerate_nginx(bench or self.bench)
         except Exception as error:
             raise SettingsApplyFailed(
                 "nginx_apply_failed",

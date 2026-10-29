@@ -34,6 +34,17 @@ def test_enabling_cloudflare_saves_the_switch_and_rewrites_nginx(tmp_path: Path)
     assert client.get("/api/v1/settings").get_json()["proxy"] == {"cloudflare": True}
 
 
+def test_the_cloudflare_switch_rewrites_nginx_for_every_production_bench(tmp_path: Path) -> None:
+    client = _client(tmp_path / "bench", production=False)
+    _client(tmp_path / "sibling")
+    _client(tmp_path / "staging", production=False)
+    with patch("pilot.core.bench.settings.regenerate_nginx") as regenerate_nginx:
+        response = client.patch("/api/v1/settings", json={"proxy": {"cloudflare": True}})
+
+    assert response.status_code == 200
+    assert [call.args[0].path.name for call in regenerate_nginx.call_args_list] == ["sibling"]
+
+
 def test_an_unchanged_cloudflare_switch_leaves_nginx_alone(tmp_path: Path) -> None:
     client = _client(tmp_path / "bench")
     with patch("pilot.core.bench.settings.regenerate_nginx") as regenerate_nginx:
