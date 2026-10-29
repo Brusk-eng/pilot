@@ -478,7 +478,7 @@ class NginxManager:
             for code, (title, message) in ERROR_PAGES.items():
                 (error_dir / f"{code}.html").write_text(render_error_html(code, title, message))
             catchall = _shared_nginx_dir() / "00-bench-default.conf"
-            catchall.write_text(self._renderer.generate_server_config(error_dir))
+            self._write_config_file(catchall, self._renderer.generate_server_config(error_dir))
             return
 
         staging = self.bench.config_path / "nginx"

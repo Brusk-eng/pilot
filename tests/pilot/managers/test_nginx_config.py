@@ -1413,6 +1413,29 @@ def test_a_config_change_refreshes_the_catch_all_before_reload(tmp_path: Path) -
     assert calls == ["catch-all", "reload"]
 
 
+def test_a_rejected_config_change_restores_the_shared_catch_all(tmp_path: Path) -> None:
+    manager = NginxManager(_bench_with_site(tmp_path, _BASE_DATA))
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    catchall = shared / "00-bench-default.conf"
+    catchall.write_text("previous")
+
+    def reject_nginx_test(command, **kwargs):
+        if "-t" in command:
+            raise CommandError("nginx -t failed")
+
+    with (
+        patch("pilot.core.adapters.domain_provider.DomainRouteProvider.proxy_servers", return_value=[]),
+        patch.object(NginxManager, "has_shared_include", new_callable=PropertyMock, return_value=True),
+        patch("pilot.managers.nginx._shared_nginx_dir", return_value=shared),
+        patch("pilot.managers.nginx.run_command", side_effect=reject_nginx_test),
+        pytest.raises(CommandError),
+    ):
+        manager.apply_config(ssl_ready=False)
+
+    assert catchall.read_text() == "previous"
+
+
 def test_removing_a_bench_from_nginx_does_not_ask_the_domain_provider(tmp_path: Path, monkeypatch) -> None:
     """A failing provider must not keep a dropped bench's routes in nginx."""
     from pilot.exceptions import DomainProviderError

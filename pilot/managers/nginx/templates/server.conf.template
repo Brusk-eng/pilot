@@ -1,6 +1,5 @@
 server_names_hash_bucket_size 256;
 
-{# Trust CF-Connecting-IP only from Cloudflare. #}
 geo $pilot_from_cloudflare {
     default 0;
     {% for network in cloudflare_networks %}
@@ -40,7 +39,6 @@ server {
 
     ssl_reject_handshake on;
     {% if cloudflare_networks %}
-    {# Match the site vhosts, or Cloudflare's HelloRetryRequest changes the cipher and fails. #}
     ssl_prefer_server_ciphers off;
     {% endif %}
 }
