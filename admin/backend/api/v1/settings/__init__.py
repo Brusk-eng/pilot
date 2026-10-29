@@ -244,18 +244,17 @@ _AUDIT_LOG_DEFAULT_LIMIT = 50
 _AUDIT_LOG_MAX_LIMIT = 500
 
 
-def _audit_filters() -> dict:
-    """Audit filters from the query string; `since`/`until` are ISO datetimes with an offset."""
+def _audit_filters(entry_type, site, status, jti, since, until) -> dict:
+    """`AuditLog.entries` filters from raw query values; `since`/`until` are ISO datetimes with an offset."""
     from datetime import datetime
 
     filters: dict[str, str | datetime | None] = {
-        "entry_type": request.args.get("type") or None,
-        "site": request.args.get("site") or None,
-        "status": request.args.get("status") or None,
-        "jti": request.args.get("jti") or None,
+        "entry_type": entry_type or None,
+        "site": site or None,
+        "status": status or None,
+        "jti": jti or None,
     }
-    for key in ("since", "until"):
-        value = request.args.get(key)
+    for key, value in (("since", since), ("until", until)):
         moment = datetime.fromisoformat(value) if value else None
         if moment is not None and moment.tzinfo is None:
             raise ValueError(f"{key} must include a timezone offset.")
@@ -272,7 +271,14 @@ def audit_log():
     bench_root = Path(current_app.config["BENCH_ROOT"])
     limit, offset = parse_pagination(_AUDIT_LOG_DEFAULT_LIMIT, _AUDIT_LOG_MAX_LIMIT)
     try:
-        filters = _audit_filters()
+        filters = _audit_filters(
+            entry_type=request.args.get("type"),
+            site=request.args.get("site"),
+            status=request.args.get("status"),
+            jti=request.args.get("jti"),
+            since=request.args.get("since"),
+            until=request.args.get("until"),
+        )
     except ValueError as error:
         return error_response("invalid_filter", str(error), 422)
     try:
@@ -293,7 +299,14 @@ def export_audit_log():
 
     bench_root = Path(current_app.config["BENCH_ROOT"])
     try:
-        filters = _audit_filters()
+        filters = _audit_filters(
+            entry_type=request.args.get("type"),
+            site=request.args.get("site"),
+            status=request.args.get("status"),
+            jti=request.args.get("jti"),
+            since=request.args.get("since"),
+            until=request.args.get("until"),
+        )
     except ValueError as error:
         return error_response("invalid_filter", str(error), 422)
     try:
