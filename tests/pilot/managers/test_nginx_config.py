@@ -1,3 +1,4 @@
+import contextlib
 import copy
 from pathlib import Path
 from unittest.mock import PropertyMock, patch
@@ -1487,6 +1488,49 @@ def test_a_config_change_renders_the_current_host_wide_cloudflare_switch(tmp_pat
         manager.apply_config(ssl_ready=False)
 
     assert "ssl_prefer_server_ciphers off;" in rendered[0]
+
+
+def _legacy_apply(manager: NginxManager, conf_dir: Path, nginx_test_fails: bool) -> list[list[str]]:
+    """Run apply_config on a host without the shared include; return the privileged commands."""
+    commands: list[list[str]] = []
+
+    def run(command, **kwargs):
+        commands.append(command)
+        if nginx_test_fails and "-t" in command:
+            raise CommandError("nginx -t failed")
+
+    with (
+        patch("pilot.core.adapters.domain_provider.DomainRouteProvider.proxy_servers", return_value=[]),
+        patch.object(NginxManager, "has_shared_include", new_callable=PropertyMock, return_value=False),
+        patch("pilot.managers.nginx.default_nginx_config_dir", return_value=conf_dir),
+        patch.object(
+            manager, "_stage_and_copy", side_effect=lambda content, target: target.write_text(content)
+        ),
+        patch("pilot.managers.nginx.run_command", side_effect=run),
+        contextlib.suppress(CommandError),
+    ):
+        manager.apply_config(ssl_ready=False)
+    return commands
+
+
+def test_a_legacy_host_skips_the_privileged_catch_all_when_unchanged(tmp_path: Path) -> None:
+    manager = NginxManager(_bench_with_site(tmp_path / "bench", _BASE_DATA))
+    catchall = tmp_path / "00-bench-default.conf"
+    catchall.write_text(manager._renderer.generate_server_config(Path("/usr/share/nginx/bench-error-pages")))
+
+    commands = _legacy_apply(manager, tmp_path, nginx_test_fails=False)
+
+    assert not any("install" in command for command in commands)
+
+
+def test_a_legacy_host_restores_the_catch_all_nginx_rejects(tmp_path: Path) -> None:
+    manager = NginxManager(_bench_with_site(tmp_path / "bench", _BASE_DATA))
+    catchall = tmp_path / "00-bench-default.conf"
+    catchall.write_text("previous")
+
+    _legacy_apply(manager, tmp_path, nginx_test_fails=True)
+
+    assert catchall.read_text() == "previous"
 
 
 def test_removing_a_bench_from_nginx_does_not_ask_the_domain_provider(tmp_path: Path, monkeypatch) -> None:

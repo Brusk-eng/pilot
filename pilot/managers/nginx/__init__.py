@@ -363,6 +363,7 @@ class NginxManager:
         self._modsec = ModSecurityRenderer(bench)
         # (content before, content written) of each config file, until `nginx -t` accepts the set.
         self._unvalidated: dict[Path, tuple[str | None, str]] = {}
+        self._unvalidated_privileged: dict[Path, str | None] = {}
 
     def is_installed(self) -> bool:
         return which("nginx") is not None
@@ -484,6 +485,21 @@ class NginxManager:
             self._write_config_file(catchall, self._renderer.generate_server_config(error_dir))
             return
 
+        catchall_conf = default_nginx_config_dir() / "00-bench-default.conf"
+        content = self._renderer.generate_server_config(_SHARED_ERROR_DIR)
+        previous = catchall_conf.read_text() if catchall_conf.exists() else None
+        if content != previous:
+            self._install_privileged_default_server(catchall_conf, content, previous)
+
+        # The distro's stock default site also claims default_server on :80;
+        # nginx rejects a duplicate, so drop it and let ours win.
+        default_site = Path("/etc/nginx/sites-enabled/default")
+        if default_site.exists() or default_site.is_symlink():
+            run_command(_privileged(["rm", "-f", str(default_site)]))
+
+    def _install_privileged_default_server(
+        self, catchall_conf: Path, content: str, previous: str | None
+    ) -> None:
         staging = self.bench.config_path / "nginx"
         for code, (title, message) in ERROR_PAGES.items():
             staged = staging / f"_catchall_{code}.html"
@@ -501,15 +517,8 @@ class NginxManager:
                 )
             )
             staged.unlink()
-
-        catchall_conf = default_nginx_config_dir() / "00-bench-default.conf"
-        self._stage_and_copy(self._renderer.generate_server_config(_SHARED_ERROR_DIR), catchall_conf)
-
-        # The distro's stock default site also claims default_server on :80;
-        # nginx rejects a duplicate, so drop it and let ours win.
-        default_site = Path("/etc/nginx/sites-enabled/default")
-        if default_site.exists() or default_site.is_symlink():
-            run_command(_privileged(["rm", "-f", str(default_site)]))
+        self._stage_and_copy(content, catchall_conf)
+        self._unvalidated_privileged[catchall_conf] = previous
 
     def _write_waf_files(self) -> None:
         """Write this bench's ModSecurity rules when WAF is enabled."""
@@ -553,6 +562,12 @@ class NginxManager:
                 else:
                     replace_private_text_locked(path, previous)
         self._unvalidated.clear()
+        for path, previous in self._unvalidated_privileged.items():
+            if previous is None:
+                run_command(_privileged(["rm", "-f", str(path)]))
+            else:
+                self._stage_and_copy(previous, path)
+        self._unvalidated_privileged.clear()
 
     @property
     def config_dir(self) -> Path:
@@ -687,6 +702,7 @@ class NginxManager:
             self._restore_unvalidated()
             raise
         self._unvalidated.clear()
+        self._unvalidated_privileged.clear()
         if not is_linux():
             run_command(["nginx", "-s", "reload"])
             return
