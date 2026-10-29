@@ -962,6 +962,8 @@ def test_a_serving_alias_serves_static_files(tmp_path: Path) -> None:
     assert f"root {tmp_path}/sites;" in alias_block
     assert "location /assets" in alias_block
     assert "location /socket.io" in alias_block
+    assert "location ^~ /_pilot/embed/cloud-settings/ {" in alias_block
+    assert "location ^~ /_pilot/embed/cloud-settings/esm/chunks/ {" in alias_block
     assert f"root {tmp_path}/sites/{_PLACEHOLDER_SITE.name}/public;" in alias_block
     assert "return 301" not in alias_block
 

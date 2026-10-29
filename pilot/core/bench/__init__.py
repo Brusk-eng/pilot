@@ -521,6 +521,36 @@ class Bench:
         return f"http://127.0.0.1:{self.config.admin.internal_port}"
 
     @property
+    def embed_endpoint(self) -> str:
+        return "/_pilot" if self.config.production.enabled else self.admin_endpoint
+
+    def configure_site_embeds(self) -> None:
+        """Update managed sites after nginx starts serving same-origin embed assets."""
+        import json
+
+        from pilot.internal.atomic_file import exclusive_file_lock, replace_private_text_locked
+
+        paths = [
+            self.sites_path / "common_site_config.json",
+            *sorted(self.sites_path.glob("*/site_config.json")),
+        ]
+        managed = False
+        for path in paths:
+            if not path.is_file() or path.is_symlink() or path.parent.is_symlink():
+                continue
+            with exclusive_file_lock(path):
+                config = json.loads(path.read_text())
+                if not (config.get("pilot_endpoint") or config.get("cloud_settings_embed_url")):
+                    continue
+                managed = True
+                if config.get("cloud_settings_embed_url") != self.embed_endpoint:
+                    config["cloud_settings_embed_url"] = self.embed_endpoint
+                    replace_private_text_locked(path, json.dumps(config, indent=2))
+        # Retry cache invalidation even when an earlier attempt already wrote the files.
+        if managed:
+            self.clear_cache()
+
+    @property
     def admin_endpoint(self) -> str:
         """The public admin URL that a browser on a site reaches."""
         from pilot.core.adapters.domain_provider import DomainRouteProvider
