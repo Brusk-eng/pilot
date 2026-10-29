@@ -1454,6 +1454,41 @@ def test_a_failed_catch_all_install_restores_the_bench_config(tmp_path: Path) ->
     assert include.read_text() == "previous"
 
 
+def test_a_failed_render_restores_the_files_already_written(tmp_path: Path) -> None:
+    manager = NginxManager(_bench_with_site(tmp_path, {**_BASE_DATA, "waf": {"enabled": True}}))
+    rules = manager._modsec.modsec_dir() / "main.conf"
+    rules.parent.mkdir(parents=True, exist_ok=True)
+    rules.write_text("previous")
+
+    with (
+        patch("pilot.core.adapters.domain_provider.DomainRouteProvider.proxy_servers", return_value=[]),
+        patch.object(manager._renderer, "generate_bench_config", side_effect=RuntimeError("render failed")),
+        pytest.raises(RuntimeError),
+    ):
+        manager.apply_config(ssl_ready=False)
+
+    assert rules.read_text() == "previous"
+
+
+def test_a_config_change_renders_the_current_host_wide_cloudflare_switch(tmp_path: Path) -> None:
+    manager = NginxManager(_bench_with_site(tmp_path / "bench", _BASE_DATA))
+    (tmp_path / "common_config.toml").write_text("[proxy]\ncloudflare = true\n")
+    rendered: list[str] = []
+
+    with (
+        patch("pilot.core.adapters.domain_provider.DomainRouteProvider.proxy_servers", return_value=[]),
+        patch.object(
+            manager,
+            "install_default_server",
+            side_effect=lambda: rendered.append(manager._renderer.generate_server_config(tmp_path)),
+        ),
+        patch.object(manager, "reload"),
+    ):
+        manager.apply_config(ssl_ready=False)
+
+    assert "ssl_prefer_server_ciphers off;" in rendered[0]
+
+
 def test_removing_a_bench_from_nginx_does_not_ask_the_domain_provider(tmp_path: Path, monkeypatch) -> None:
     """A failing provider must not keep a dropped bench's routes in nginx."""
     from pilot.exceptions import DomainProviderError

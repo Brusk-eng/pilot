@@ -12,6 +12,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
+from pilot.config.common import CommonConfig
 from pilot.config.proxy import CLOUDFLARE_NETWORKS
 from pilot.config.waf import parse_nginx_size
 from pilot.exceptions import CommandError
@@ -427,6 +428,8 @@ class NginxManager:
         # Removing a bench's routes renders nothing, so it never depends on the provider.
         self._renderer.get_proxy_servers()
         with self.config_lock():
+            # The proxy switch is host-wide and may have changed since this bench was read.
+            self.bench.config.proxy = CommonConfig.read(self.bench.path.parent).proxy
             yield
 
     def write_config(self, ssl_ready: bool = False) -> None:
@@ -436,18 +439,16 @@ class NginxManager:
 
     def apply_config(self, ssl_ready: bool = True) -> None:
         """Write this bench's config, test it and reload nginx, or put the old files back."""
-        with self._render_lock():
+        with self._render_lock(), self._restore_on_failure():
             self.generate_config(ssl_ready=ssl_ready)
-            with self._restore_on_failure():
-                self.install_default_server()
-                self.reload()
+            self.install_default_server()
+            self.reload()
 
     def publish_config(self, ssl_ready: bool = False) -> None:
         """Write this bench's config and include it in nginx, then test and reload."""
-        with self._render_lock():
+        with self._render_lock(), self._restore_on_failure():
             self.generate_config(ssl_ready=ssl_ready)
-            with self._restore_on_failure():
-                self.install_config()
+            self.install_config()
 
     def reload_for_site_change(self) -> None:
         if not self.bench.config.production.enabled or not self.is_installed():
