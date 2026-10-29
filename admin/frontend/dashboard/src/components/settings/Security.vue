@@ -6,6 +6,7 @@ import SettingsRow from '@/components/settings/SettingsRow.vue'
 import ChangeAdminPassword from '@/components/settings/ChangeAdminPassword.vue'
 import TwoFactor from '@/components/settings/TwoFactor.vue'
 import Firewall from '@/components/settings/Firewall.vue'
+import Cloudflare from '@/components/settings/Cloudflare.vue'
 import Waf from '@/components/settings/Waf.vue'
 import SshKeys from '@/components/settings/SshKeys.vue'
 
@@ -40,6 +41,7 @@ const revokeOtherSessions = async () => {
   />
   <TwoFactor v-else-if="openSection?.id === 'two-factor'" />
   <Firewall v-else-if="openSection?.id === 'firewall'" />
+  <Cloudflare v-else-if="openSection?.id === 'cloudflare'" />
   <Waf v-else-if="openSection?.id === 'waf'" />
   <SshKeys v-else-if="openSection?.id === 'ssh-keys'" />
 

@@ -24,6 +24,7 @@ from pilot.core.bench.settings import (
     is_restart_needed,
     llm_payload,
     mail_payload,
+    proxy_payload,
     resource_limits_payload,
     restart_trigger_values,
     s3_payload,
@@ -104,6 +105,7 @@ def build_settings_response(config: BenchConfig, bench_root: Path | None = None)
         },
         "workers": worker_groups_payload(config),
         "firewall": firewall_payload(config),
+        "proxy": proxy_payload(config),
         "waf": {
             **waf_payload(config),
             "installed": WafManager.is_installed(),
@@ -227,6 +229,16 @@ def get_settings():
     return jsonify(build_settings_response(config, bench_root))
 
 
+@settings_bp.get("/cloudflare")
+def get_cloudflare_status():
+    from pilot.exceptions import DomainProviderError
+
+    try:
+        return jsonify(Bench(Path(current_app.config["BENCH_ROOT"])).get_cloudflare_status())
+    except DomainProviderError as error:
+        return error_response("cloudflare_status_unavailable", str(error), 502)
+
+
 _AUDIT_LOG_DEFAULT_LIMIT = 50
 _AUDIT_LOG_MAX_LIMIT = 500
 
@@ -327,6 +339,7 @@ def update_settings():
             update["old_firewall"],
             update["old_waf"],
             update["old_s3_config"],
+            update["old_proxy"],
         )
     except SettingsApplyFailed as error:
         return error_response(error.code, error.message, 500, {"saved": True})
@@ -341,6 +354,7 @@ def _save_settings_update(bench_root: Path, data: dict) -> dict:
         old_firewall = firewall_payload(config)
         old_waf = waf_payload(config)
         old_s3_config = s3_payload(config)
+        old_proxy = proxy_payload(config)
 
         patcher = ConfigPatcher(config, data, mail)
         if error := patcher.apply():
@@ -359,6 +373,7 @@ def _save_settings_update(bench_root: Path, data: dict) -> dict:
         "old_firewall": old_firewall,
         "old_waf": old_waf,
         "old_s3_config": old_s3_config,
+        "old_proxy": old_proxy,
     }
 
 
@@ -396,10 +411,12 @@ def apply_post_save_changes(
     old_firewall: dict,
     old_waf: dict,
     old_s3_config: dict,
+    old_proxy: dict,
 ) -> tuple[bool, str | None]:
     return Bench(config, bench_root).apply_saved_settings(
         old_restart,
         old_firewall,
         old_waf,
         old_s3_config,
+        old_proxy,
     )

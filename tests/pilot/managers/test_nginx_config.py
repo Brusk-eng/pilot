@@ -494,6 +494,22 @@ def test_server_config_is_default_server(tmp_path: Path) -> None:
     # serving the first TLS vhost's cert.
     assert "listen 443 ssl http2 default_server;" in conf
     assert "ssl_reject_handshake on;" in conf
+    assert "ssl_prefer_server_ciphers" not in conf
+    assert "map $pilot_from_cloudflare $pilot_client_addr" in conf
+    assert "173.245.48.0/20 1;" not in conf
+
+
+def test_server_config_with_cloudflare_trusts_cf_connecting_ip_from_cloudflare_only(tmp_path: Path) -> None:
+    renderer = _renderer(tmp_path)
+    renderer.bench.config.proxy.cloudflare = True
+    conf = renderer.generate_server_config(Path("/usr/share/nginx/bench-error-pages"))
+
+    assert "173.245.48.0/20 1;" in conf
+    assert "2400:cb00::/32 1;" in conf
+    assert "1       $http_cf_connecting_ip;" in conf
+    assert "default $remote_addr;" in conf
+    assert "log_format pilot_access '$pilot_client_addr " in conf
+    assert "ssl_prefer_server_ciphers off;" in conf
 
 
 def test_server_config_declares_pilot_access_log_format(tmp_path: Path) -> None:
@@ -1082,6 +1098,8 @@ def test_provider_passthrough_route_enables_proxy_protocol(tmp_path: Path) -> No
 
     assert "listen 443 ssl http2 proxy_protocol;" in config
     assert "real_ip_header     proxy_protocol;" in config
+    assert "X-Forwarded-For    $pilot_client_addr;" in config
+    assert "X-Real-IP          $pilot_client_addr;" in config
     assert "proxy_set_header   X-Forwarded-Proto  https;" in config
 
 
@@ -1370,6 +1388,7 @@ def test_a_config_change_holds_the_host_lock_until_nginx_accepts_it(tmp_path: Pa
         patch(
             "pilot.core.adapters.domain_provider.DomainRouteProvider.proxy_servers", side_effect=proxy_servers
         ),
+        patch.object(manager, "install_default_server"),
         patch.object(manager, "reload", side_effect=lambda: locked_at_reload.append(_is_locked(lock_file))),
     ):
         manager.apply_config(ssl_ready=False)
@@ -1378,6 +1397,20 @@ def test_a_config_change_holds_the_host_lock_until_nginx_accepts_it(tmp_path: Pa
     assert locked_at_provider == [False]
     assert locked_at_reload == [True]
     assert not _is_locked(lock_file)
+
+
+def test_a_config_change_refreshes_the_catch_all_before_reload(tmp_path: Path) -> None:
+    manager = NginxManager(_bench_with_site(tmp_path, _BASE_DATA))
+    calls: list[str] = []
+
+    with (
+        patch("pilot.core.adapters.domain_provider.DomainRouteProvider.proxy_servers", return_value=[]),
+        patch.object(manager, "install_default_server", side_effect=lambda: calls.append("catch-all")),
+        patch.object(manager, "reload", side_effect=lambda: calls.append("reload")),
+    ):
+        manager.apply_config(ssl_ready=False)
+
+    assert calls == ["catch-all", "reload"]
 
 
 def test_removing_a_bench_from_nginx_does_not_ask_the_domain_provider(tmp_path: Path, monkeypatch) -> None:

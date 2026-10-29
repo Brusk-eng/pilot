@@ -79,6 +79,11 @@ export const SECURITY_SECTIONS: SettingsSection[] = [
     description: 'Inspect incoming requests for attacks before they reach your sites.',
   },
   {
+    id: 'cloudflare',
+    label: 'Cloudflare settings',
+    description: 'Accept traffic proxied by Cloudflare and log the real visitor IP.',
+  },
+  {
     id: 'ssh-keys',
     label: 'SSH keys',
     description: 'Manage authorized public keys for server access.',

@@ -206,6 +206,7 @@ class NginxConfigRenderer:
             https_port=nginx.https_port,
             error_dir=error_dir,
             error_codes=list(ERROR_PAGES),
+            cloudflare_networks=CLOUDFLARE_NETWORKS if self.bench.config.proxy.cloudflare else (),
         )
 
     def get_proxy_servers(self) -> list[str]:
@@ -267,7 +268,7 @@ class NginxConfigRenderer:
             proxy_protocol=client_ip_source == "proxy_protocol_v2",
             trusted_proxy=client_ip_source != "direct",
             forwarded_for=(
-                "$proxy_protocol_addr"
+                "$pilot_client_addr"
                 if client_ip_source == "proxy_protocol_v2"
                 else "$http_x_forwarded_for"
                 if client_ip_source == "x_forwarded_for"
@@ -299,7 +300,7 @@ class NginxConfigRenderer:
             proxy_protocol=client_ip_source == "proxy_protocol_v2",
             trusted_proxy=client_ip_source != "direct",
             forwarded_for=(
-                "$proxy_protocol_addr"
+                "$pilot_client_addr"
                 if client_ip_source == "proxy_protocol_v2"
                 else "$http_x_forwarded_for"
                 if client_ip_source == "x_forwarded_for"
@@ -437,6 +438,7 @@ class NginxManager:
         """Write this bench's config, test it and reload nginx, or put the old files back."""
         with self._render_lock():
             self.generate_config(ssl_ready=ssl_ready)
+            self.install_default_server()
             self.reload()
 
     def publish_config(self, ssl_ready: bool = False) -> None:
