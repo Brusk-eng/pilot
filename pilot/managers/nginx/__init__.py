@@ -51,6 +51,7 @@ _SERVER_TEMPLATE = Template.from_path(_TEMPLATES / "server.conf.template")
 _ERROR_PAGE_TEMPLATE = Template.from_path(_TEMPLATES / "error_page.html.template")
 _STARTUP_PAGE_TEMPLATE = Template.from_path(_TEMPLATES / "startup_page.html.template")
 _RECOVERY_TEMPLATE = Template.from_path(_TEMPLATES / "recovery.conf.template")
+_EMBED_TEMPLATE = Template.from_path(_TEMPLATES / "embed.conf.template")
 
 _CORS_PATHS = ["/api/v1/health", "/api/v1/bootstrap", "/api/v1/setup/actions/finish"]
 
@@ -349,6 +350,7 @@ class NginxConfigRenderer:
             "waf_rules_file": self.bench.config_path / "modsecurity" / "main.conf",
             "cors_paths": _CORS_PATHS,
             "admin_static": _admin_static_dir(),
+            "site_embed": _EMBED_TEMPLATE.render(admin_static=_admin_static_dir()),
             "vhosts": vhosts,
             "aliases": aliases or [],
         }
