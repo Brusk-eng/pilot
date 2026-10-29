@@ -9,6 +9,7 @@ import type { CloudflareStatus } from '@/types/settings'
 import { errorMessage } from '@/utils/error'
 
 const loading = ref(true)
+const loaded = ref(false)
 const saving = ref(false)
 const error = ref('')
 const production = ref(true)
@@ -49,6 +50,7 @@ onMounted(async () => {
     const data = await settingsApi.get()
     production.value = !!data.production?.enabled
     saved.value = enabled.value = !!data.proxy?.cloudflare
+    loaded.value = true
     status.value = await settingsApi.cloudflareStatus()
   } catch (e) {
     error.value = errorMessage(e, 'Could not load Cloudflare settings.')
@@ -84,6 +86,7 @@ onMounted(async () => {
       label="Sites use Cloudflare proxy"
       description="Trust Cloudflare for the visitor IP and accept its TLS handshakes. Applies to every bench on this server."
       :model-value="enabled"
+      :disabled="!loaded"
       @update:model-value="(v: boolean) => (enabled = v)"
     />
 
@@ -133,7 +136,12 @@ onMounted(async () => {
     <ErrorMessage v-if="error" :message="error" />
 
     <div class="flex justify-end">
-      <Button variant="solid" :loading="saving" :disabled="enabled === saved" @click="save">
+      <Button
+        variant="solid"
+        :loading="saving"
+        :disabled="!loaded || enabled === saved"
+        @click="save"
+      >
         Save changes
       </Button>
     </div>
