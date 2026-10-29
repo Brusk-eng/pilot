@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Annotated, ClassVar
 
 from pilot.commands import Arg, BenchMode, Command
 from pilot.exceptions import BenchError
-from pilot.internal.tasks.store import TaskStore
 
 if TYPE_CHECKING:
     from pilot.core.bench import Bench
@@ -26,16 +25,15 @@ class DropSiteCommand(Command):
 
     def run(self) -> None:
         site = self.bench.site(self.site_name)
-        if not site.exists:
-            raise BenchError(f"Site '{self.site_name}' does not exist in this bench.")
-        TaskStore(self.bench.path).ensure_resource_free(f"site:{self.site_name.lower()}")
-        self.confirm(f"Permanently delete site '{self.site_name}'?", skip=self.skip_confirm)
-        site.drop(
-            on_progress=self.report,
-            no_backup=self.no_backup,
-            force=self.force,
-            archived_sites_path=self.archived_sites_path,
-        )
+        site.ensure_exists()
+        with site.reserve():
+            self.confirm(f"Permanently delete site '{self.site_name}'?", skip=self.skip_confirm)
+            site.drop(
+                on_progress=self.report,
+                no_backup=self.no_backup,
+                force=self.force,
+                archived_sites_path=self.archived_sites_path,
+            )
 
     @classmethod
     def from_frappe_args(cls, bench: "Bench", args: tuple[str, ...]) -> "DropSiteCommand":

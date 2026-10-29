@@ -68,6 +68,35 @@ def test_drop_site_refuses_while_a_task_uses_the_site(tmp_path: Path) -> None:
     drop.assert_not_called()
 
 
+def test_drop_site_refuses_while_the_site_is_reserved(tmp_path: Path) -> None:
+    bench = make_bench_with_site(tmp_path)
+
+    with (
+        bench.site("site1.localhost").reserve(),
+        patch("pilot.core.site.Site.drop") as drop,
+        pytest.raises(TaskConflictError, match=r"site:site1\.localhost"),
+    ):
+        DropSiteCommand(bench, site_name="site1.localhost", skip_confirm=True).run()
+
+    drop.assert_not_called()
+
+
+def test_drop_site_holds_the_site_while_dropping(tmp_path: Path) -> None:
+    bench = make_bench_with_site(tmp_path)
+
+    def queue_backup(**kwargs) -> None:
+        TaskStore(bench.path).create_queued(
+            {"task_id": "20260715-120000-aabbcc", "command": "backup-site", "args": {}},
+            resource_key="site:site1.localhost",
+        )
+
+    with (
+        patch("pilot.core.site.Site.drop", side_effect=queue_backup),
+        pytest.raises(TaskConflictError, match=r"site:site1\.localhost"),
+    ):
+        DropSiteCommand(bench, site_name="site1.localhost", skip_confirm=True).run()
+
+
 def test_drop_site_is_a_pilot_command() -> None:
     assert forwarded_frappe_args(["drop-site", "site1.localhost"]) is None
 
