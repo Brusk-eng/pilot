@@ -438,14 +438,16 @@ class NginxManager:
         """Write this bench's config, test it and reload nginx, or put the old files back."""
         with self._render_lock():
             self.generate_config(ssl_ready=ssl_ready)
-            self.install_default_server()
-            self.reload()
+            with self._restore_on_failure():
+                self.install_default_server()
+                self.reload()
 
     def publish_config(self, ssl_ready: bool = False) -> None:
         """Write this bench's config and include it in nginx, then test and reload."""
         with self._render_lock():
             self.generate_config(ssl_ready=ssl_ready)
-            self.install_config()
+            with self._restore_on_failure():
+                self.install_config()
 
     def reload_for_site_change(self) -> None:
         if not self.bench.config.production.enabled or not self.is_installed():
@@ -530,6 +532,14 @@ class NginxManager:
                 previous = path.read_text() if path.exists() else None
             self._unvalidated[path] = (previous, content)
             replace_private_text_locked(path, content)
+
+    @contextmanager
+    def _restore_on_failure(self) -> Iterator[None]:
+        try:
+            yield
+        except BaseException:
+            self._restore_unvalidated()
+            raise
 
     def _restore_unvalidated(self) -> None:
         """Put back the files nginx rejected, except a file that another operation rewrote since."""

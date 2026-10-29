@@ -1436,6 +1436,24 @@ def test_a_rejected_config_change_restores_the_shared_catch_all(tmp_path: Path) 
     assert catchall.read_text() == "previous"
 
 
+def test_a_failed_catch_all_install_restores_the_bench_config(tmp_path: Path) -> None:
+    manager = NginxManager(_bench_with_site(tmp_path, _BASE_DATA))
+    include = manager.bench.config_path / "nginx" / "include.conf"
+    include.parent.mkdir(parents=True, exist_ok=True)
+    include.write_text("previous")
+
+    with (
+        patch("pilot.core.adapters.domain_provider.DomainRouteProvider.proxy_servers", return_value=[]),
+        patch.object(manager, "install_default_server", side_effect=CommandError("install failed")),
+        patch.object(manager, "reload") as reload,
+        pytest.raises(CommandError),
+    ):
+        manager.apply_config(ssl_ready=False)
+
+    reload.assert_not_called()
+    assert include.read_text() == "previous"
+
+
 def test_removing_a_bench_from_nginx_does_not_ask_the_domain_provider(tmp_path: Path, monkeypatch) -> None:
     """A failing provider must not keep a dropped bench's routes in nginx."""
     from pilot.exceptions import DomainProviderError

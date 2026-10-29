@@ -122,10 +122,17 @@ class BenchSettings:
     def _apply_nginx_to_host(self) -> None:
         """Re-render every production bench, since the proxy settings are host-wide."""
         from pilot.core.bench import Bench
-        from pilot.utils import iter_sibling_benches
 
-        siblings = [Bench(config, path) for path, config in iter_sibling_benches(self.bench.path)]
-        for bench in [self.bench, *siblings]:
+        for path in sorted(self.bench.path.parent.iterdir()):
+            if not (path / "bench.toml").exists():
+                continue
+            try:
+                bench = Bench(BenchConfig.read(path), path)
+            except Exception as error:
+                raise SettingsApplyFailed(
+                    "nginx_apply_failed",
+                    f"Settings were saved, but bench '{path.name}' could not be read to apply them.",
+                ) from error
             if bench.config.production.enabled:
                 self._apply_nginx(bench)
 

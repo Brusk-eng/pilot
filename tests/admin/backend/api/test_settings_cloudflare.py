@@ -45,6 +45,18 @@ def test_the_cloudflare_switch_rewrites_nginx_for_every_production_bench(tmp_pat
     assert [call.args[0].path.name for call in regenerate_nginx.call_args_list] == ["sibling"]
 
 
+def test_the_cloudflare_switch_reports_an_unreadable_bench(tmp_path: Path) -> None:
+    client = _client(tmp_path / "bench")
+    (tmp_path / "broken").mkdir()
+    (tmp_path / "broken" / "bench.toml").write_text("not = [valid")
+    with patch("pilot.core.bench.settings.regenerate_nginx"):
+        response = client.patch("/api/v1/settings", json={"proxy": {"cloudflare": True}})
+
+    assert response.status_code == 500
+    assert response.get_json()["error"]["details"] == {"saved": True}
+    assert "'broken'" in response.get_json()["error"]["message"]
+
+
 def test_an_unchanged_cloudflare_switch_leaves_nginx_alone(tmp_path: Path) -> None:
     client = _client(tmp_path / "bench")
     with patch("pilot.core.bench.settings.regenerate_nginx") as regenerate_nginx:
