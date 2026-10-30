@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, Response, current_app, jsonify, request
 
 from admin.backend.api.responses import error_response
 from admin.backend.api.v1.settings.config import ConfigPatcher
@@ -244,6 +244,24 @@ _AUDIT_LOG_DEFAULT_LIMIT = 50
 _AUDIT_LOG_MAX_LIMIT = 500
 
 
+def _audit_filters(entry_type, site, status, jti, since, until) -> dict:
+    """`AuditLog.entries` filters from raw query values; `since`/`until` are ISO datetimes with an offset."""
+    from datetime import datetime
+
+    filters: dict[str, str | datetime | None] = {
+        "entry_type": entry_type or None,
+        "site": site or None,
+        "status": status or None,
+        "jti": jti or None,
+    }
+    for key, value in (("since", since), ("until", until)):
+        moment = datetime.fromisoformat(value) if value else None
+        if moment is not None and moment.tzinfo is None:
+            raise ValueError(f"{key} must include a timezone offset.")
+        filters[key] = moment
+    return filters
+
+
 @audit_bp.get("/audit-events")
 def audit_log():
     """Return filtered bench audit events, newest first."""
@@ -253,20 +271,55 @@ def audit_log():
     bench_root = Path(current_app.config["BENCH_ROOT"])
     limit, offset = parse_pagination(_AUDIT_LOG_DEFAULT_LIMIT, _AUDIT_LOG_MAX_LIMIT)
     try:
+        filters = _audit_filters(
+            entry_type=request.args.get("type"),
+            site=request.args.get("site"),
+            status=request.args.get("status"),
+            jti=request.args.get("jti"),
+            since=request.args.get("since"),
+            until=request.args.get("until"),
+        )
+    except ValueError as error:
+        return error_response("invalid_filter", str(error), 422)
+    try:
         log = AuditLog(Bench(bench_root))
 
         def fetch_newest(count: int) -> list:
-            return log.entries(
-                entry_type=request.args.get("type") or None,
-                site=request.args.get("site") or None,
-                status=request.args.get("status") or None,
-                jti=request.args.get("jti") or None,
-                limit=count,
-            )
+            return log.entries(**filters, limit=count)
 
         return paginated_response(fetch_newest, limit, offset)
     except Exception:
         return error_response("audit_unavailable", "Could not read audit events.", 500)
+
+
+@audit_bp.get("/audit-events/export")
+def export_audit_log():
+    """Download filtered bench audit events as CSV."""
+    from pilot.core.bench.audit_log import AuditLog
+
+    bench_root = Path(current_app.config["BENCH_ROOT"])
+    try:
+        filters = _audit_filters(
+            entry_type=request.args.get("type"),
+            site=request.args.get("site"),
+            status=request.args.get("status"),
+            jti=request.args.get("jti"),
+            since=request.args.get("since"),
+            until=request.args.get("until"),
+        )
+    except ValueError as error:
+        return error_response("invalid_filter", str(error), 422)
+    try:
+        body = AuditLog(Bench(bench_root)).get_csv(**filters)
+    except Exception:
+        return error_response("audit_unavailable", "Could not read audit events.", 500)
+    return Response(
+        body,
+        mimetype="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filters["site"] or bench_root.name}-activity-log.csv"'
+        },
+    )
 
 
 @network_bp.get("/network/client")

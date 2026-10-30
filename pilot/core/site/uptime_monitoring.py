@@ -33,6 +33,10 @@ class UptimeMonitor:
     def get_sites(self) -> list[str]:
         return [site.config.name for site in self.bench.sites()]
 
+    def get_maintenance_sites(self) -> set[str]:
+        """Sites serving frappe's 503 page on purpose, such as during an update."""
+        return {site.config.name for site in self.bench.sites() if site.maintenance_mode}
+
     def ping_site(self, site_name: str) -> dict:
         url = f"https://{site_name}{PING_PATH}"
         start = time.monotonic()
@@ -53,6 +57,10 @@ class UptimeMonitor:
     def collect(self) -> None:
         """Ping every site on this bench once and append results to its uptime log."""
         results = [self.ping_site(site_name) for site_name in self.get_sites()]
+        maintenance_sites = self.get_maintenance_sites()
+        for result in results:
+            if result["site"] in maintenance_sites:
+                result["maintenance"] = True
         with self._configurator.log_path.open("a") as log_file:
             for result in results:
                 log_file.write(json.dumps(result) + "\n")
@@ -60,9 +68,11 @@ class UptimeMonitor:
 
     def send_alert_if_required(self, results: list[dict]) -> None:
         """A site that has failed its ping for five unbroken minutes is an
-        incident worth waking someone for. One ping can fail for any reason."""
+        incident worth waking someone for. One ping can fail for any reason.
+        Sites in maintenance are down on purpose and never alert."""
         alerting = self.bench.config.resource_limits.site_uptime
-        down = [result["site"] for result in results if not result["up"]] if alerting else []
+        down = [result["site"] for result in results if not result["up"] and not result.get("maintenance")]
+        down = down if alerting else []
         alerts = SustainedAlerts(self.alerts_path)
         due = alerts.due(down)
 

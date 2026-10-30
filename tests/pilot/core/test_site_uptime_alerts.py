@@ -124,6 +124,7 @@ def test_collect_logs_every_ping_and_then_alerts(tmp_path: Path) -> None:
 
     with (
         patch.object(UptimeMonitor, "get_sites", return_value=["a.test"]),
+        patch.object(UptimeMonitor, "get_maintenance_sites", return_value=set()),
         patch.object(UptimeMonitor, "ping_site", return_value=_ping("a.test", up=False)),
     ):
         monitor.collect()
@@ -131,6 +132,25 @@ def test_collect_logs_every_ping_and_then_alerts(tmp_path: Path) -> None:
     logged = json.loads(monitor._configurator.log_path.read_text().splitlines()[-1])
     assert logged["site"] == "a.test"
     assert list(json.loads(monitor.alerts_path.read_text())) == ["a.test"]
+
+
+def test_a_site_in_maintenance_never_alerts(tmp_path: Path) -> None:
+    monitor = _monitor(tmp_path)
+    monitor._configurator.log_path.parent.mkdir(parents=True, exist_ok=True)
+    sent = []
+
+    with (
+        patch.object(UptimeMonitor, "get_sites", return_value=["a.test"]),
+        patch.object(UptimeMonitor, "get_maintenance_sites", return_value={"a.test"}),
+        patch.object(UptimeMonitor, "ping_site", side_effect=lambda site: _ping(site, up=False)),
+        patch("pilot.core.alerts.send_alert", lambda *args: sent.append(args)),
+    ):
+        monitor.collect()
+
+    logged = json.loads(monitor._configurator.log_path.read_text().splitlines()[-1])
+    assert logged["maintenance"] is True
+    assert sent == []
+    assert not monitor.alerts_path.exists() or json.loads(monitor.alerts_path.read_text()) == {}
 
 
 def test_an_undelivered_alert_is_retried_on_the_next_tick(tmp_path: Path) -> None:
